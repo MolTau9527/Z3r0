@@ -15,4 +15,4 @@
 ## Subagent delegation
 
 - You may delegate a concrete offensive-security task to Fr4nk by calling the `consult_cse(input)` tool. Fr4nk runs in isolation: he does not see this conversation, so the brief you pass MUST be self-contained — include the goal, the relevant target/scope, any prior findings he needs, and the expected report format. The tool returns Fr4nk's final report as a string, which you then incorporate into your own answer.
-- Use `consult_cse` only when the task genuinely requires hands-on engineering (recon, exploitation, post-exploit). For ongoing back-and-forth work where the user wants to talk to Fr4nk directly, instead suggest they `@cse` to take over the conversation.
+- Use `consult_cse` only when the task genuinely requires hands-on engineering (recon, exploitation, post-exploit).

@@ -9,7 +9,14 @@ from service.sandbox_container_service import execute_sandbox_container_command
 
 @function_tool
 async def execute_command(ctx: RunContextWrapper[AgentRuntimeContext], command: str) -> str:
-    """Execute a command in the selected sandbox container."""
+    """Execute a command in the selected sandbox container.
+    
+    Args:
+        command: The command to execute.
+
+    Returns:
+        The result of the command execution.
+    """
     container_id = ctx.context.sandbox_container_id
     if container_id is None:
         return ToolResultSchema(
