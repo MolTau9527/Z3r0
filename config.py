@@ -46,12 +46,18 @@ class AgentPoolConfig(StrictConfigModel):
     sweep_interval_seconds: int = Field(default=60, ge=1)
 
 
+# per-process agent run tuning
+class AgentRuntimeConfig(StrictConfigModel):
+    subordinate_max_turns: int = Field(default=1000, ge=1)
+
+
 # global config
 class GlobalConfig(StrictConfigModel):
     system: SystemConfig = Field(default_factory=SystemConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     agents: dict[str, AgentConfig] = Field(default_factory=dict)
     agent_pool: AgentPoolConfig = Field(default_factory=AgentPoolConfig)
+    agent_runtime: AgentRuntimeConfig = Field(default_factory=AgentRuntimeConfig)
 
 
 ###

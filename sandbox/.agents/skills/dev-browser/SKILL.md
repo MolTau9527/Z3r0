@@ -7,13 +7,6 @@ description: Browser automation with persistent page state. Use when users ask t
 
 A CLI for controlling browsers with sandboxed JavaScript scripts.
 
-## Installation
-
-```bash
-npm install -g dev-browser
-dev-browser install
-```
-
 ## Usage
 
 Run `dev-browser --help` to learn more. Prioritize connecting to an already open browser process instead of opening a new browser each time.

@@ -11,6 +11,7 @@ from typing import Any
 from agents import Agent, RunContextWrapper, Runner, Tool, TResponseInputItem, function_tool
 from agents.stream_events import AgentUpdatedStreamEvent
 
+from config import get_config
 from core.context import AgentRuntimeContext
 from core.events import event_from_sdk_stream
 from core.session import Z3r0Session
@@ -318,11 +319,13 @@ async def _run_subagent_task(
     result: Any = None
     buffers: dict[str, _DeltaBuffer] = {}
     try:
+        max_turns = get_config().agent_runtime.subordinate_max_turns
         stream = Runner.run_streamed(
             starting_agent=child_agent,
             input=snapshot.brief,
             session=memory_session,
             context=context,
+            max_turns=max_turns,
         )
         result = stream
         async for sdk_event in stream.stream_events():

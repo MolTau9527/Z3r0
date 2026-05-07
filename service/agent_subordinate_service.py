@@ -37,7 +37,7 @@ async def create_subagent_task(
         parent_agent_code=parent_agent_code,
         agent_code=agent_code,
         agent_name=agent_name,
-        status=AgentSubordinateStatus.RUNNING,
+        status=AgentSubordinateStatus.RUNNING.value,
         brief=brief,
         nested_call_id=nested_call_id,
         owner_id=owner_id,
@@ -102,10 +102,10 @@ async def mark_stale_running_subagent_tasks_failed() -> int:
     now = datetime.now()
     async with get_async_session() as session:
         rows = (await session.exec(
-            select(AgentSubordinateTask).where(AgentSubordinateTask.status == AgentSubordinateStatus.RUNNING)
+            select(AgentSubordinateTask).where(AgentSubordinateTask.status == AgentSubordinateStatus.RUNNING.value)
         )).all()
         for task in rows:
-            task.status = AgentSubordinateStatus.FAILED
+            task.status = AgentSubordinateStatus.FAILED.value
             task.error = "Subagent task was interrupted by backend restart."
             task.updated_at = now
             task.finished_at = now
@@ -131,7 +131,7 @@ async def _finish_subagent_task(
             return None
         if task.status in TERMINAL_SUBAGENT_STATUSES:
             return snapshot_from_task(task)
-        task.status = status
+        task.status = status.value
         task.result = result
         task.error = error
         task.progress = ""
@@ -150,7 +150,7 @@ def snapshot_from_task(task: AgentSubordinateTask) -> AgentSubordinateTaskSnapsh
         parent_agent_code=task.parent_agent_code,
         agent_code=task.agent_code,
         agent_name=task.agent_name,
-        status=task.status,
+        status=_coerce_subagent_status(task.status),
         brief=task.brief,
         result=task.result,
         error=task.error,
@@ -161,6 +161,12 @@ def snapshot_from_task(task: AgentSubordinateTask) -> AgentSubordinateTaskSnapsh
         started_at=task.started_at,
         finished_at=task.finished_at,
     )
+
+
+def _coerce_subagent_status(status: AgentSubordinateStatus | str) -> AgentSubordinateStatus:
+    if isinstance(status, AgentSubordinateStatus):
+        return status
+    return AgentSubordinateStatus(status.lower())
 
 
 def _can_access_task(

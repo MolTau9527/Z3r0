@@ -1,16 +1,13 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Enum
+from sqlalchemy import Column, String
 from sqlmodel import Field, SQLModel
 
 from schema.agent_subordinate_schema import AgentSubordinateStatus
 
 
 _AGENT_SUBORDINATE_STATUS_COLUMN = Column(
-    Enum(
-        AgentSubordinateStatus,
-        values_callable=lambda enum_cls: [member.value for member in enum_cls],
-    ),
+    String(32),
     index=True,
     nullable=False,
 )

@@ -1,4 +1,5 @@
 from agents.extensions.memory import SQLAlchemySession
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -38,8 +39,37 @@ async def create_all_tables() -> None:
     async with _engine.begin() as conn:
         await conn.run_sync(sdk_metadata.create_all)
         await conn.run_sync(SQLModel.metadata.create_all)
+        await _ensure_agent_subordinate_status_varchar(conn)
 
     logger.info("all tables created")
+
+
+async def _ensure_agent_subordinate_status_varchar(conn) -> None:
+    """Keep existing DBs compatible after moving subagent status off PG enum."""
+
+    await conn.execute(text("""
+        DO $$
+        DECLARE
+            status_data_type text;
+        BEGIN
+            SELECT data_type INTO status_data_type
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'agent_subordinates'
+              AND column_name = 'status';
+
+            IF status_data_type = 'USER-DEFINED' THEN
+                ALTER TABLE agent_subordinates
+                    ALTER COLUMN status DROP DEFAULT,
+                    ALTER COLUMN status TYPE varchar(32) USING lower(status::text)::varchar(32);
+            END IF;
+        END $$;
+    """))
+    await conn.execute(text("""
+        UPDATE agent_subordinates
+        SET status = lower(status)
+        WHERE status IN ('RUNNING', 'COMPLETED', 'FAILED', 'CANCELED')
+    """))
 
 
 async def close_engine() -> None:
