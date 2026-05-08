@@ -1,6 +1,7 @@
 import hmac
+import secrets
 from dataclasses import dataclass
-from hashlib import sha256
+from hashlib import pbkdf2_hmac
 from datetime import datetime, timedelta
 
 import jwt
@@ -17,6 +18,10 @@ from schema.system_user_schema import SystemUserRole
 
 logger = get_logger(__name__)
 
+_PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
+_PASSWORD_HASH_ITERATIONS = 390_000
+_PASSWORD_SALT_BYTES = 16
+
 
 @dataclass(frozen=True)
 class DeleteSystemUserResult:
@@ -25,10 +30,34 @@ class DeleteSystemUserResult:
     message: str = ""
 
 
-def _encrypt_password(password: str) -> str:
-    """encrypt user password"""
-    cfg = get_config()
-    return hmac.new(cfg.system.encrypt_key.encode(), password.encode(), sha256).hexdigest()
+def _hash_password(password: str) -> str:
+    salt = secrets.token_hex(_PASSWORD_SALT_BYTES)
+    digest = pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("ascii"),
+        _PASSWORD_HASH_ITERATIONS,
+    ).hex()
+    return f"{_PASSWORD_HASH_ALGORITHM}${_PASSWORD_HASH_ITERATIONS}${salt}${digest}"
+
+
+def _verify_password(password: str, password_hash: str) -> bool:
+    try:
+        algorithm, iterations_text, salt, expected_digest = password_hash.split("$", 3)
+        iterations = int(iterations_text)
+    except (ValueError, TypeError):
+        return False
+
+    if algorithm != _PASSWORD_HASH_ALGORITHM or iterations <= 0 or not salt or not expected_digest:
+        return False
+
+    actual_digest = pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("ascii"),
+        iterations,
+    ).hex()
+    return hmac.compare_digest(actual_digest, expected_digest)
 
 
 async def create_system_user(
@@ -43,7 +72,7 @@ async def create_system_user(
         role=role,
         email=email,
         username=username,
-        password=_encrypt_password(password),
+        password=_hash_password(password),
         created_at=now,
         updated_at=now,
     )
@@ -98,7 +127,7 @@ async def update_system_user(
         if username is not None:
             system_user.username = username
         if password is not None:
-            system_user.password = _encrypt_password(password)
+            system_user.password = _hash_password(password)
 
         system_user.updated_at = datetime.now()
         session.add(system_user)
@@ -144,7 +173,7 @@ async def system_user_login(email: str, password: str) -> str | None:
         if system_user is None:
             return None
 
-        if system_user.password != _encrypt_password(password):
+        if not _verify_password(password, system_user.password):
             return None
 
         token = jwt.encode(

@@ -1,5 +1,5 @@
 import { Button, TextArea } from "@douyinfe/semi-ui";
-import { AtSign, OctagonX, Send, Square, X } from "lucide-react";
+import { AtSign, OctagonX, Send, Square } from "lucide-react";
 import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentPicker } from "./AgentPicker";
 import type { AgentInfo } from "../../shared/api/types";
@@ -192,15 +192,6 @@ export function Composer({
             aria-label="Cancel all running subagent tasks"
             title={canCancelAll ? "Cancel all running subagent tasks" : "No running subagent tasks"}
           />
-          {pickerOpen ? (
-            <Button
-              icon={<X size={14} />}
-              theme="borderless"
-              type="tertiary"
-              onClick={closePicker}
-              aria-label="Close agent picker"
-            />
-          ) : null}
         </div>
       </div>
     </div>

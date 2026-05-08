@@ -79,6 +79,14 @@ type WindowDragState = {
   startY: number;
 };
 
+type WindowResizeState = {
+  target: "shell" | "filemanager";
+  width: number;
+  height: number;
+  startX: number;
+  startY: number;
+};
+
 type FloatingWindowProps = {
   actions: ReactNode;
   children: ReactNode;
@@ -155,7 +163,7 @@ export function ContainerShellProvider({ children }: { children: ReactNode }) {
   const dragRef = useRef<WindowDragState | null>(null);
   const noVNCDragRef = useRef<WindowDragState | null>(null);
   const fileManagerDragRef = useRef<WindowDragState | null>(null);
-  const resizeRef = useRef<{ width: number; height: number; startX: number; startY: number } | null>(null);
+  const resizeRef = useRef<WindowResizeState | null>(null);
   const fitWithoutSnapRef = useRef(false);
   const connectionKeyRef = useRef(0);
   const activeContainerHash = shell?.containerHash ?? null;
@@ -482,6 +490,7 @@ export function ContainerShellProvider({ children }: { children: ReactNode }) {
         x: clamp(current.x, 8, window.innerWidth - 80),
         y: clamp(current.y, 8, window.innerHeight - 80),
       } : current);
+      setFileManager((current) => current ? clampWindowToViewport(current) : current);
       if (shell?.dockState === "normal") window.setTimeout(fitTerminal, 0);
     };
     window.addEventListener("resize", onWindowResize);
@@ -518,11 +527,12 @@ export function ContainerShellProvider({ children }: { children: ReactNode }) {
 
     const resize = resizeRef.current;
     if (resize) {
-      setShell((current) => current ? {
-        ...current,
-        width: clamp(resize.width + event.clientX - resize.startX, MIN_WIDTH, window.innerWidth - 24),
-        height: clamp(resize.height + event.clientY - resize.startY, MIN_HEIGHT, window.innerHeight - 24),
-      } : current);
+      const nextSize = getResizedWindowSize(resize, event);
+      if (resize.target === "shell") {
+        setShell((current) => current ? { ...current, ...nextSize } : current);
+        return;
+      }
+      setFileManager((current) => current ? { ...current, ...nextSize } : current);
     }
   }, []);
 
@@ -575,7 +585,7 @@ export function ContainerShellProvider({ children }: { children: ReactNode }) {
                 className="shell-resize-handle"
                 onPointerDown={(event) => {
                   if (shell.isMaximized) return;
-                  resizeRef.current = { width: shell.width, height: shell.height, startX: event.clientX, startY: event.clientY };
+                  resizeRef.current = beginWindowResize("shell", shell, event);
                 }}
               />
             )}
@@ -637,6 +647,14 @@ export function ContainerShellProvider({ children }: { children: ReactNode }) {
             onHeaderPointerDown={(event) => {
               fileManagerDragRef.current = beginWindowDrag(fileManager, event, { capturePointer: true });
             }}
+            resizeHandle={(
+              <div
+                className="shell-resize-handle"
+                onPointerDown={(event) => {
+                  resizeRef.current = beginWindowResize("filemanager", fileManager, event);
+                }}
+              />
+            )}
           >
             <ContainerFileManager
               containerId={fileManager.containerId}
@@ -746,10 +764,36 @@ function beginWindowDrag(
   return { x: rect.x, y: rect.y, startX: event.clientX, startY: event.clientY };
 }
 
+function beginWindowResize(
+  target: WindowResizeState["target"],
+  rect: ShellRect,
+  event: ReactPointerEvent<HTMLDivElement>,
+): WindowResizeState {
+  event.currentTarget.setPointerCapture(event.pointerId);
+  return { target, width: rect.width, height: rect.height, startX: event.clientX, startY: event.clientY };
+}
+
 function getDraggedWindowPosition(drag: WindowDragState, event: PointerEvent) {
   return {
     x: clamp(drag.x + event.clientX - drag.startX, 8, window.innerWidth - 80),
     y: clamp(drag.y + event.clientY - drag.startY, 8, window.innerHeight - 80),
+  };
+}
+
+function getResizedWindowSize(resize: WindowResizeState, event: PointerEvent): Pick<ShellRect, "width" | "height"> {
+  return {
+    width: clamp(resize.width + event.clientX - resize.startX, MIN_WIDTH, window.innerWidth - 24),
+    height: clamp(resize.height + event.clientY - resize.startY, MIN_HEIGHT, window.innerHeight - 24),
+  };
+}
+
+function clampWindowToViewport<T extends ShellRect>(rect: T): T {
+  return {
+    ...rect,
+    x: clamp(rect.x, 8, window.innerWidth - 80),
+    y: clamp(rect.y, 8, window.innerHeight - 80),
+    width: clamp(rect.width, MIN_WIDTH, window.innerWidth - 24),
+    height: clamp(rect.height, MIN_HEIGHT, window.innerHeight - 24),
   };
 }
 

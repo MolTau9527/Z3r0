@@ -2175,6 +2175,15 @@ export interface operations {
                     "application/json": components["schemas"]["CommonResponse_Any_"];
                 };
             };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse"];
+                };
+            };
         };
     };
     copy_container_files_route_api_sandbox_containers__id__files_copy_post: {
@@ -2244,6 +2253,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse"];
                 };
             };
         };
@@ -2317,6 +2335,15 @@ export interface operations {
                     "application/json": components["schemas"]["CommonResponse_Any_"];
                 };
             };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse"];
+                };
+            };
         };
     };
     mkdir_container_files_route_api_sandbox_containers__id__files_mkdir_post: {
@@ -2386,6 +2413,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse"];
                 };
             };
         };
@@ -2459,6 +2495,15 @@ export interface operations {
                     "application/json": components["schemas"]["CommonResponse_Any_"];
                 };
             };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse"];
+                };
+            };
         };
     };
     read_container_file_route_api_sandbox_containers__id__files_read_get: {
@@ -2527,6 +2572,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse"];
                 };
             };
         };
@@ -2598,6 +2652,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse"];
                 };
             };
         };

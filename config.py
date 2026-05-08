@@ -1,7 +1,8 @@
 import json
+import secrets
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 ROOT_PATH = Path(__file__).resolve().parent
@@ -14,10 +15,24 @@ class StrictConfigModel(BaseModel):
 
 
 # system config
+class BootstrapAdminConfig(StrictConfigModel):
+    enabled: bool = Field(default=False)
+    username: str = Field(default="admin", min_length=1, max_length=64)
+    email: str = Field(default="admin@z3r0.fans", min_length=1, max_length=255)
+    password: str = Field(default="", max_length=128)
+
+    @model_validator(mode="after")
+    def validate_password_when_enabled(self):
+        if self.enabled and not self.password:
+            raise ValueError("bootstrap admin password is required when bootstrap admin is enabled")
+        return self
+
+
 class SystemConfig(StrictConfigModel):
     listen_addr: str = Field(default="127.0.0.1")
     listen_port: int = Field(default=8000)
-    encrypt_key: str = Field(default="z3r0-jwt-secret-key-1234567890!@#$")
+    encrypt_key: str = Field(default_factory=lambda: secrets.token_urlsafe(32), min_length=32)
+    bootstrap_admin: BootstrapAdminConfig = Field(default_factory=BootstrapAdminConfig)
 
 
 # database config

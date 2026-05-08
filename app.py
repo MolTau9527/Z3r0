@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from config import ROOT_PATH
+from config import ROOT_PATH, get_config
 from core.subordinates import start_subagent_runtime, stop_subagent_runtime
 from core.runtime import get_agent_pool
 from database import close_engine, create_all_tables, init_engine
@@ -44,18 +44,23 @@ WEB_DIST_PATH = ROOT_PATH / "web" / "dist"
 API_PREFIX = "/api"
 
 
-async def _create_default_admin() -> None:
-    if await query_system_user_by_username("admin") is not None:
-        logger.info("default admin user already exists")
+async def _bootstrap_admin_user() -> None:
+    bootstrap = get_config().system.bootstrap_admin
+    if not bootstrap.enabled:
+        logger.info("bootstrap admin user skipped")
+        return
+
+    if await query_system_user_by_username(bootstrap.username) is not None:
+        logger.info("bootstrap admin user already exists: %s", bootstrap.username)
         return
 
     await create_system_user(
-        username="admin",
-        password="123456",
-        email="admin@z3r0.fans",
+        username=bootstrap.username,
+        password=bootstrap.password,
+        email=bootstrap.email,
         role=SystemUserRole.ADMIN,
     )
-    logger.info("default admin user created")
+    logger.info("bootstrap admin user created: %s", bootstrap.username)
 
 
 def _mount_frontend(app: FastAPI) -> None:
@@ -81,7 +86,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     try:
         init_engine()
         await create_all_tables()
-        await _create_default_admin()
+        await _bootstrap_admin_user()
 
         set_tracing_disabled(True)
         await start_subagent_runtime()

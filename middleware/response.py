@@ -16,7 +16,7 @@ class CommonResponseStatusMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
+        if scope["type"] != "http" or not _is_api_scope(scope):
             await self.app(scope, receive, send)
             return
 
@@ -44,6 +44,11 @@ class CommonResponseStatusMiddleware:
             await send({**message, "body": body})
 
         await self.app(scope, receive, send_wrapper)
+
+
+def _is_api_scope(scope: Scope) -> bool:
+    path = str(scope.get("path") or "")
+    return path == "/api" or path.startswith("/api/")
 
 
 def _sync_common_response_status(response_start: Message, body: bytes) -> Message:

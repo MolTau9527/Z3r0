@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { showApiError } from "../api/feedback";
 
 type QueryParams = {
@@ -24,11 +24,15 @@ export function usePagedResourceList<Item>({ pageSize, query }: UsePagedResource
   const [keyword, setKeyword] = useState("");
   const [activeKeyword, setActiveKeyword] = useState("");
   const [loading, setLoading] = useState(false);
+  const requestIdRef = useRef(0);
 
   const loadItems = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setLoading(true);
     try {
       const response = await query({ page, size: pageSize, keyword: activeKeyword });
+      if (requestIdRef.current !== requestId) return;
       const nextItems = response.data?.items || [];
       if (nextItems.length === 0 && page > 1) {
         setPage((current) => Math.max(1, current - 1));
@@ -36,9 +40,13 @@ export function usePagedResourceList<Item>({ pageSize, query }: UsePagedResource
       }
       setItems(nextItems);
     } catch (error) {
-      showApiError(error);
+      if (requestIdRef.current === requestId) {
+        showApiError(error);
+      }
     } finally {
-      setLoading(false);
+      if (requestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
   }, [activeKeyword, page, pageSize, query]);
 

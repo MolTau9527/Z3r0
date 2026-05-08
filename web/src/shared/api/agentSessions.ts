@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { apiRequest, buildAuthenticatedWebSocketUrl } from "./client";
 import type {
   CreateAgentSessionResponse,
   DeleteAgentSessionResponse,
@@ -30,6 +30,5 @@ export function deleteAgentSession(sessionId: string) {
 }
 
 export function buildAgentStreamUrl(sessionId: string, token: string) {
-  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${wsScheme}://${window.location.host}${AGENT_SESSIONS_PATH}/${encodeURIComponent(sessionId)}/stream?token=${encodeURIComponent(token)}`;
+  return buildAuthenticatedWebSocketUrl(`${AGENT_SESSIONS_PATH}/${encodeURIComponent(sessionId)}/stream`, token);
 }

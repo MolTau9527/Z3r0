@@ -1,12 +1,16 @@
-import { apiRequest } from "./client";
+import { apiRequest, buildAuthenticatedWebSocketUrl } from "./client";
 import { buildQuery } from "./query";
-import { getStoredAccessToken } from "../auth/session";
 import type {
   ContainerFileCopyRequest,
+  ContainerFileCopyResponse,
   ContainerFileDeleteRequest,
+  ContainerFileDeleteResponse,
   ContainerFileMkdirRequest,
+  ContainerFileMkdirResponse,
   ContainerFileMoveRequest,
+  ContainerFileMoveResponse,
   ContainerFileWriteRequest,
+  ContainerFileWriteResponse,
   CreateSandboxContainerRequest,
   CreateSandboxContainerResponse,
   DeleteSandboxContainerResponse,
@@ -68,10 +72,7 @@ export function deleteSandboxContainer(id: SandboxContainerPathParams["id"]) {
 }
 
 export function buildContainerShellUrl(containerHash: string) {
-  const token = getStoredAccessToken();
-  if (!token) throw new Error("missing access token");
-  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${wsScheme}://${window.location.host}${SANDBOX_CONTAINERS_PATH}/${encodeURIComponent(containerHash)}/shell?token=${encodeURIComponent(token)}`;
+  return buildAuthenticatedWebSocketUrl(`${SANDBOX_CONTAINERS_PATH}/${encodeURIComponent(containerHash)}/shell`);
 }
 
 export function getContainerNoVNCPortMapping(container: SandboxContainer) {
@@ -114,21 +115,21 @@ export function readContainerFile(id: number, params: ReadContainerFileParams) {
 }
 
 export function writeContainerFile(id: number, payload: ContainerFileWriteRequest) {
-  return apiRequest(`${SANDBOX_CONTAINERS_PATH}/${id}/files/write`, { method: "POST", body: payload });
+  return apiRequest<ContainerFileWriteResponse>(`${SANDBOX_CONTAINERS_PATH}/${id}/files/write`, { method: "POST", body: payload });
 }
 
 export function copyContainerFiles(id: number, payload: ContainerFileCopyRequest) {
-  return apiRequest(`${SANDBOX_CONTAINERS_PATH}/${id}/files/copy`, { method: "POST", body: payload });
+  return apiRequest<ContainerFileCopyResponse>(`${SANDBOX_CONTAINERS_PATH}/${id}/files/copy`, { method: "POST", body: payload });
 }
 
 export function moveContainerFiles(id: number, payload: ContainerFileMoveRequest) {
-  return apiRequest(`${SANDBOX_CONTAINERS_PATH}/${id}/files/move`, { method: "POST", body: payload });
+  return apiRequest<ContainerFileMoveResponse>(`${SANDBOX_CONTAINERS_PATH}/${id}/files/move`, { method: "POST", body: payload });
 }
 
 export function deleteContainerFiles(id: number, payload: ContainerFileDeleteRequest) {
-  return apiRequest(`${SANDBOX_CONTAINERS_PATH}/${id}/files/delete`, { method: "POST", body: payload });
+  return apiRequest<ContainerFileDeleteResponse>(`${SANDBOX_CONTAINERS_PATH}/${id}/files/delete`, { method: "POST", body: payload });
 }
 
 export function createContainerDirectory(id: number, payload: ContainerFileMkdirRequest) {
-  return apiRequest(`${SANDBOX_CONTAINERS_PATH}/${id}/files/mkdir`, { method: "POST", body: payload });
+  return apiRequest<ContainerFileMkdirResponse>(`${SANDBOX_CONTAINERS_PATH}/${id}/files/mkdir`, { method: "POST", body: payload });
 }

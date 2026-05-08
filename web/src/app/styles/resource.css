@@ -425,8 +425,4 @@
   .table-toolbar {
     grid-template-columns: 1fr;
   }
-
-  .signal-pill {
-    display: none;
-  }
 }

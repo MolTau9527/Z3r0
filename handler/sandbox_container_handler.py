@@ -3,12 +3,11 @@ import json
 from http import HTTPStatus
 from typing import Any
 
-import jwt
 from fastapi import WebSocket, WebSocketDisconnect, status as ws_status
 from fastapi.websockets import WebSocketState
 
-from config import get_config
 from logger import get_logger
+from middleware.auth import decode_access_token
 from schema.response_schema import CommonResponse
 from schema.sandbox_container_schema import (
     ContainerFileCopyRequest,
@@ -276,26 +275,11 @@ async def _close_silently(websocket: WebSocket, code: int = ws_status.WS_1011_IN
 
 
 def _is_admin_ws_token(token: str) -> bool:
-    payload = _decode_ws_token(token)
-    return payload is not None and payload.get("role") == SystemUserRole.ADMIN.value
-
-
-def _decode_ws_token(token: str) -> dict | None:
-    if not token:
-        return None
-    cfg = get_config()
     try:
-        payload = jwt.decode(
-            token,
-            key=cfg.system.encrypt_key,
-            algorithms=["HS256"],
-            options={"require": ["exp", "id", "role", "email", "username", "sub"]},
-        )
-    except jwt.InvalidTokenError:
-        return None
-    if payload.get("sub") != "z3r0":
-        return None
-    return payload
+        user = decode_access_token(token)
+    except Exception:
+        return False
+    return user is not None and user.role == SystemUserRole.ADMIN
 
 
 def _bounded_int(value: Any, default: int, minimum: int, maximum: int) -> int:

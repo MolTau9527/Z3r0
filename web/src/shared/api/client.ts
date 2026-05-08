@@ -72,3 +72,9 @@ export async function apiRequest<ResponsePayload>(path: string, options: Request
 
   return parsed as ResponsePayload;
 }
+
+export function buildAuthenticatedWebSocketUrl(path: string, token = getStoredAccessToken()) {
+  if (!token) throw new Error("missing access token");
+  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${wsScheme}://${window.location.host}${path}?token=${encodeURIComponent(token)}`;
+}

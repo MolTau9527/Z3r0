@@ -1,21 +1,19 @@
 import asyncio
 from datetime import datetime
-from http import HTTPStatus
 import shlex
+from http import HTTPStatus
 from collections.abc import Callable
 
 from fastapi.websockets import WebSocketState
-import jwt
 from fastapi import WebSocket, WebSocketDisconnect, status as ws_status
 from pydantic import ValidationError
 
-from config import get_config
 from core.subordinates import subscribe_session_events, unsubscribe_session_events
 from core.context import AgentRuntimeContext, AgentUserContext
 from core.runtime import get_agent_pool
 from core.tools import SANDBOX_SKILLS_DIR
 from logger import get_logger
-from middleware.auth import AuthUser
+from middleware.auth import AuthUser, decode_access_token
 from schema.agent_event_schema import (
     AgentEventSchema,
     AgentStreamActionSchema,
@@ -511,21 +509,7 @@ def _front_matter_from_lines(lines: list[str]) -> str | None:
 
 
 def _decode_ws_token(token: str) -> AuthUser | None:
-    if not token:
-        return None
-    cfg = get_config()
     try:
-        payload = jwt.decode(
-            token,
-            key=cfg.system.encrypt_key,
-            algorithms=["HS256"],
-            options={"require": ["exp", "id", "role", "email", "username", "sub"]},
-        )
-    except jwt.InvalidTokenError:
-        return None
-    try:
-        if payload.get("sub") != "z3r0":
-            return None
-        return AuthUser.from_payload(payload)
-    except (KeyError, ValueError, TypeError):
+        return decode_access_token(token)
+    except Exception:
         return None

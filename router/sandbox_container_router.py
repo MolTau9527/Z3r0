@@ -18,7 +18,7 @@ from handler.sandbox_container_handler import (
     stop_sandbox_container_handler,
 )
 from middleware.auth import AuthUser, require_admin, require_user
-from router._responses import BAD_REQUEST_RESPONSE, COMMON_ERROR_RESPONSES, not_found_response
+from router._responses import BAD_REQUEST_RESPONSE, COMMON_ERROR_RESPONSES, INTERNAL_ERROR_RESPONSE, not_found_response
 from schema.response_schema import CommonResponse
 from schema.sandbox_container_schema import (
     ContainerFileCopyRequest,
@@ -38,6 +38,12 @@ from schema.sandbox_container_schema import (
 
 NOT_FOUND_RESPONSE = not_found_response("Sandbox container")
 CREATE_NOT_FOUND_RESPONSE = not_found_response("Sandbox image")
+FILE_OPERATION_ERROR_RESPONSES = {
+    **COMMON_ERROR_RESPONSES,
+    **NOT_FOUND_RESPONSE,
+    **BAD_REQUEST_RESPONSE,
+    **INTERNAL_ERROR_RESPONSE,
+}
 
 router = APIRouter(
     prefix="/sandbox-containers",
@@ -206,7 +212,7 @@ router.add_api_route(
     methods=["GET"],
     dependencies=ADMIN_ONLY,
     response_model=CommonResponse[ListContainerFilesResponse],
-    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE, **BAD_REQUEST_RESPONSE},
+    responses=FILE_OPERATION_ERROR_RESPONSES,
 )
 
 router.add_api_route(
@@ -215,7 +221,7 @@ router.add_api_route(
     methods=["GET"],
     dependencies=ADMIN_ONLY,
     response_model=CommonResponse[ContainerFileReadResponse],
-    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE, **BAD_REQUEST_RESPONSE},
+    responses=FILE_OPERATION_ERROR_RESPONSES,
 )
 
 router.add_api_route(
@@ -224,7 +230,7 @@ router.add_api_route(
     methods=["POST"],
     dependencies=ADMIN_ONLY,
     response_model=CommonResponse,
-    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE, **BAD_REQUEST_RESPONSE},
+    responses=FILE_OPERATION_ERROR_RESPONSES,
 )
 
 router.add_api_route(
@@ -233,7 +239,7 @@ router.add_api_route(
     methods=["POST"],
     dependencies=ADMIN_ONLY,
     response_model=CommonResponse,
-    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE, **BAD_REQUEST_RESPONSE},
+    responses=FILE_OPERATION_ERROR_RESPONSES,
 )
 
 router.add_api_route(
@@ -242,7 +248,7 @@ router.add_api_route(
     methods=["POST"],
     dependencies=ADMIN_ONLY,
     response_model=CommonResponse,
-    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE, **BAD_REQUEST_RESPONSE},
+    responses=FILE_OPERATION_ERROR_RESPONSES,
 )
 
 router.add_api_route(
@@ -251,7 +257,7 @@ router.add_api_route(
     methods=["POST"],
     dependencies=ADMIN_ONLY,
     response_model=CommonResponse,
-    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE, **BAD_REQUEST_RESPONSE},
+    responses=FILE_OPERATION_ERROR_RESPONSES,
 )
 
 router.add_api_route(
@@ -260,7 +266,7 @@ router.add_api_route(
     methods=["POST"],
     dependencies=ADMIN_ONLY,
     response_model=CommonResponse,
-    responses={**COMMON_ERROR_RESPONSES, **NOT_FOUND_RESPONSE, **BAD_REQUEST_RESPONSE},
+    responses=FILE_OPERATION_ERROR_RESPONSES,
 )
 
 

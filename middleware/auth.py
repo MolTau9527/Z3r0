@@ -53,24 +53,36 @@ class JwtAuthMiddleware(BaseHTTPMiddleware):
         if token is None:
             return _error_response(HTTPStatus.UNAUTHORIZED, "invalid bearer token")
 
-        cfg = get_config()
         try:
-            payload = jwt.decode(
-                token,
-                key=cfg.system.encrypt_key,
-                algorithms=["HS256"],
-                options={"require": ["exp", "id", "role", "email", "username", "sub"]},
-            )
+            user = decode_access_token(token)
         except jwt.ExpiredSignatureError:
             return _error_response(HTTPStatus.UNAUTHORIZED, "token expired")
         except jwt.InvalidTokenError:
             return _error_response(HTTPStatus.UNAUTHORIZED, "invalid token")
-
-        if not _is_valid_payload(payload):
+        if user is None:
             return _error_response(HTTPStatus.UNAUTHORIZED, "invalid token payload")
 
-        request.state.system_user = AuthUser.from_payload(payload)
+        request.state.system_user = user
         return await call_next(request)
+
+
+def decode_access_token(token: str) -> AuthUser | None:
+    if not token:
+        return None
+
+    cfg = get_config()
+    payload = jwt.decode(
+        token,
+        key=cfg.system.encrypt_key,
+        algorithms=["HS256"],
+        options={"require": ["exp", "id", "role", "email", "username", "sub"]},
+    )
+    if not _is_valid_payload(payload):
+        return None
+    try:
+        return AuthUser.from_payload(payload)
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def require_user(request: Request) -> AuthUser:

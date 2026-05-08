@@ -35,11 +35,15 @@ export function ContainerFileManager({ containerId, containerHash, containerName
   const [historyIndex, setHistoryIndex] = useState(0);
   const [viewingFile, setViewingFile] = useState<ContainerFileInfo | null>(null);
   const [createType, setCreateType] = useState<"file" | "dir" | null>(null);
+  const requestIdRef = useRef(0);
 
   const loadFiles = useCallback(async (dir: string) => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setLoading(true);
     try {
       const response = await listContainerFiles(containerId, { path: dir });
+      if (requestIdRef.current !== requestId) return;
       const fileList = response.data?.files ?? [];
       fileList.sort((a, b) => {
         if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
@@ -49,13 +53,28 @@ export function ContainerFileManager({ containerId, containerHash, containerName
       setPath(dir);
       setSelectedPaths(new Set());
     } catch (error) {
-      showApiError(error);
+      if (requestIdRef.current === requestId) {
+        showApiError(error);
+      }
     } finally {
-      setLoading(false);
+      if (requestIdRef.current === requestId) {
+        setLoading(false);
+      }
     }
   }, [containerId]);
 
-  useEffect(() => { void loadFiles(path); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    requestIdRef.current += 1;
+    setPath("/");
+    setFiles([]);
+    setClipboard(null);
+    setSelectedPaths(new Set());
+    setPathHistory(["/"]);
+    setHistoryIndex(0);
+    setViewingFile(null);
+    setCreateType(null);
+    void loadFiles("/");
+  }, [containerId, containerHash, loadFiles]);
 
   const navigateTo = useCallback((dir: string) => {
     const newHistory = pathHistory.slice(0, historyIndex + 1);

@@ -99,7 +99,6 @@ export function AdminLayout() {
           <div className="topbar-actions">
             {headerActions ? <div className="topbar-resource-actions">{headerActions}</div> : null}
             <div className="topbar-session-actions">
-              <div className="signal-pill"><span /> Secure session</div>
               <Avatar size="small" color="red">A</Avatar>
               <Button icon={<LogOut size={16} />} theme="borderless" onClick={handleSignOut} aria-label="Sign out" />
             </div>
