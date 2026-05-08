@@ -9,4 +9,9 @@ A CLI for controlling browsers with sandboxed JavaScript scripts.
 
 ## Usage
 
-Run `dev-browser --help` to learn more. Prioritize connecting to an already open browser process instead of opening a new browser each time.
+Run `dev-browser --help` to learn more.
+
+## Safety taboos
+
+- All operations must use `--connect` to connect directly to an already running browser process; opening another browser is prohibited!
+- Generally, screenshots are not required unless explicitly requested by the user.

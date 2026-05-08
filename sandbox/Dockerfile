@@ -64,9 +64,14 @@ RUN set -eux; \
       --no-install-recommends \
       ca-certificates \
       chromium \
+      curl \
       nodejs \
+      npm \
+      python3 \
+      python3-pip \
       supervisor \
       websockify \
+      wget \
       x11vnc \
       xvfb \
       fonts-droid-fallback; \
