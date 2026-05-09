@@ -515,6 +515,7 @@ def _clone_context_for_background(
         session_id=context.session_id,
         user=context.user,
         agent_code=context.agent_code,
+        knowledge_generation=context.knowledge_generation,
         sandbox_container_id=context.sandbox_container_id,
         sandbox_container_generation=context.sandbox_container_generation,
         sandbox_skill_metadata=context.sandbox_skill_metadata,

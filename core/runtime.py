@@ -249,9 +249,10 @@ class AgentSession:
             self._tool_snapshot = tool_snapshot
             self._agent_graph = self._registry.bind(tool_snapshot)
             logger.debug(
-                "agent graph bound session=%s agent=%s sandbox=%s generation=%d",
+                "agent graph bound session=%s agent=%s knowledge_generation=%d sandbox=%s generation=%d",
                 self.session_id,
                 agent_code,
+                tool_snapshot.knowledge_generation,
                 tool_snapshot.sandbox_container_id,
                 tool_snapshot.sandbox_container_generation,
             )
@@ -456,6 +457,7 @@ def _context_for_notification(
         session_id=base.session_id,
         user=base.user,
         agent_code=notification.target_agent_code,
+        knowledge_generation=base.knowledge_generation,
         sandbox_container_id=notification.sandbox_container_id,
         sandbox_container_generation=notification.sandbox_container_generation,
         sandbox_skill_metadata=notification.sandbox_skill_metadata,

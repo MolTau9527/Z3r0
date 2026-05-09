@@ -10,7 +10,7 @@ from agents.extensions.models.litellm_model import LitellmModel
 from config import AgentConfig, WORKSPACE, get_config
 from core import subordinates
 from core.context import AgentRuntimeContext
-from core.tools.knowledge_tool import load_knowledge, load_knowledge_metadata
+from core.tools.knowledge_tool import create_knowledge, load_knowledge, load_knowledge_metadata, update_knowledge
 from core.tools.sandbox_tool import load_skill, execute_command
 from logger import get_logger
 
@@ -38,6 +38,7 @@ class AgentSpec:
 
 @dataclass(frozen=True, slots=True)
 class AgentToolSnapshot:
+    knowledge_generation: int = 0
     sandbox_container_id: int | None = None
     sandbox_container_generation: int = 0
     sandbox_skill_metadata: tuple[str, ...] = ()
@@ -45,6 +46,7 @@ class AgentToolSnapshot:
     @classmethod
     def from_context(cls, context: AgentRuntimeContext) -> "AgentToolSnapshot":
         return cls(
+            knowledge_generation=context.knowledge_generation,
             sandbox_container_id=context.sandbox_container_id,
             sandbox_container_generation=context.sandbox_container_generation,
             sandbox_skill_metadata=context.sandbox_skill_metadata,
@@ -52,13 +54,16 @@ class AgentToolSnapshot:
 
 
 DEFAULT_AGENT_CODE = "cso"
+KNOWLEDGE_TOOLS = (
+    ToolMount(load_knowledge),
+    ToolMount(create_knowledge),
+    ToolMount(update_knowledge),
+)
 
 _AGENT_SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
         code="cso",
-        tools=(
-            ToolMount(load_knowledge),
-        ),
+        tools=KNOWLEDGE_TOOLS,
         subagents=(
             SubagentMount(
                 code="csa",
@@ -73,7 +78,7 @@ _AGENT_SPECS: tuple[AgentSpec, ...] = (
         tools=(
             ToolMount(execute_command, requires_sandbox_container=True),
             ToolMount(load_skill, requires_sandbox_container=True),
-            ToolMount(load_knowledge),
+            *KNOWLEDGE_TOOLS,
         ),
     ),
     AgentSpec(
@@ -81,7 +86,7 @@ _AGENT_SPECS: tuple[AgentSpec, ...] = (
         tools=(
             ToolMount(execute_command, requires_sandbox_container=True),
             ToolMount(load_skill, requires_sandbox_container=True),
-            ToolMount(load_knowledge),
+            *KNOWLEDGE_TOOLS,
         ),
     ),
 )
@@ -226,18 +231,30 @@ def _build_instructions(
 
 
 def _build_agent_knowledge_instructions(agent_code: str, knowledge_metadata: tuple[str, ...]) -> str:
+    header = (
+        "# Agent Knowledge System\n\n"
+        "This agent can maintain reusable professional knowledge under "
+        f"`.z3r0/agents/{agent_code}/knowledges` with `create_knowledge`, `load_knowledge`, "
+        "and `update_knowledge`. Use these tools only for durable, verified, role-specific professional "
+        "knowledge. Do not store user preferences, user profiles, personal data, credentials, secrets, "
+        "one-off task state, conversation summaries, speculative claims, or knowledge outside this agent's role. "
+        "Before creating new knowledge, check whether an existing knowledge should be updated. Before updating "
+        "body content, call `load_knowledge`; its line numbers are body-only and are the line numbers accepted "
+        "by `update_knowledge`. The `update_knowledge` tool changes name and description through explicit "
+        "parameters only; body line patches cannot edit YAML Front Matter.\n\n"
+    )
     if not knowledge_metadata:
         return (
-            "# Agent Knowledges\n\n"
+            header +
             f"No agent knowledges were discovered under `.z3r0/agents/{agent_code}/knowledges`."
         )
 
     return (
-        "# Agent Knowledges\n\n"
+        header +
         "This agent exposes these knowledge metadata blocks from "
         f"`.z3r0/agents/{agent_code}/knowledges`. Only YAML Front Matter is shown here; use the "
-        "`load_knowledge` tool with the knowledge file name without the `.md` suffix to read the "
-        "knowledge body before applying a knowledge.\n\n"
+        "`load_knowledge` tool with the knowledge file name without the `.md` suffix and optional body "
+        "line range to read line-numbered knowledge body before applying or updating a knowledge.\n\n"
         + "\n\n".join(knowledge_metadata)
     )
 

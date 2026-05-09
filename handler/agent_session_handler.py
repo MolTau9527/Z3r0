@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from core.subordinates import subscribe_session_events, unsubscribe_session_events
 from core.context import AgentRuntimeContext, AgentUserContext
 from core.runtime import get_agent_pool
-from core.tools import SANDBOX_SKILLS_DIR
+from core.tools import SANDBOX_SKILLS_DIR, current_knowledge_generation
 from logger import get_logger
 from middleware.auth import AuthUser, decode_access_token
 from schema.agent_event_schema import (
@@ -426,6 +426,7 @@ async def _build_runtime_context(
         session_id=session_id,
         user=_agent_user_context(user),
         agent_code=agent_code,
+        knowledge_generation=current_knowledge_generation(),
         sandbox_container_id=selected_container_id,
         sandbox_container_generation=selected_container_generation,
         sandbox_skill_metadata=sandbox_skill_metadata,
@@ -433,7 +434,12 @@ async def _build_runtime_context(
 
 
 def _build_base_runtime_context(session_id: str, user: AuthUser, agent_code: str = "") -> AgentRuntimeContext:
-    return AgentRuntimeContext(session_id=session_id, user=_agent_user_context(user), agent_code=agent_code)
+    return AgentRuntimeContext(
+        session_id=session_id,
+        user=_agent_user_context(user),
+        agent_code=agent_code,
+        knowledge_generation=current_knowledge_generation(),
+    )
 
 
 def _agent_user_context(user: AuthUser) -> AgentUserContext:
