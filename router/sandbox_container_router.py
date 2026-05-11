@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Query, WebSocket
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, WebSocket
+from starlette.responses import StreamingResponse
 
 from handler.sandbox_container_handler import (
     create_sandbox_container_handler,
@@ -7,10 +8,12 @@ from handler.sandbox_container_handler import (
     handle_container_shell_stream,
     handle_copy_files,
     handle_delete_files,
+    handle_download_files,
     handle_list_files,
     handle_mkdir,
     handle_move_files,
     handle_read_file,
+    handle_upload_files,
     handle_write_file,
     query_available_sandbox_containers_handler,
     query_sandbox_containers_handler,
@@ -18,7 +21,7 @@ from handler.sandbox_container_handler import (
     stop_sandbox_container_handler,
 )
 from middleware.auth import AuthUser, require_admin, require_user
-from router._responses import BAD_REQUEST_RESPONSE, COMMON_ERROR_RESPONSES, INTERNAL_ERROR_RESPONSE, not_found_response
+from router._responses import BAD_REQUEST_RESPONSE, COMMON_ERROR_RESPONSES, CONFLICT_RESPONSE, INTERNAL_ERROR_RESPONSE, not_found_response
 from schema.response_schema import CommonResponse
 from schema.sandbox_container_schema import (
     ContainerFileCopyRequest,
@@ -26,6 +29,7 @@ from schema.sandbox_container_schema import (
     ContainerFileMkdirRequest,
     ContainerFileMoveRequest,
     ContainerFileReadResponse,
+    ContainerFileUploadResponse,
     ContainerFileWriteRequest,
     CreateSandboxContainerRequest,
     DeleteSandboxContainerResponse,
@@ -43,6 +47,10 @@ FILE_OPERATION_ERROR_RESPONSES = {
     **NOT_FOUND_RESPONSE,
     **BAD_REQUEST_RESPONSE,
     **INTERNAL_ERROR_RESPONSE,
+}
+FILE_UPLOAD_ERROR_RESPONSES = {
+    **FILE_OPERATION_ERROR_RESPONSES,
+    **CONFLICT_RESPONSE,
 }
 
 router = APIRouter(
@@ -178,6 +186,22 @@ async def write_container_file_route(
     return await handle_write_file(id=id, body=body)
 
 
+async def upload_container_files_route(
+    id: int,
+    path: str = Form(default="/"),
+    overwrite: bool = Form(default=True),
+    files: list[UploadFile] = File(),
+) -> CommonResponse[ContainerFileUploadResponse]:
+    return await handle_upload_files(id=id, path=path, files=files, overwrite=overwrite)
+
+
+async def download_container_files_route(
+    id: int,
+    path: list[str] = Query(min_length=1),
+) -> StreamingResponse | CommonResponse:
+    return await handle_download_files(id=id, paths=path)
+
+
 async def copy_container_files_route(
     id: int,
     body: ContainerFileCopyRequest,
@@ -231,6 +255,34 @@ router.add_api_route(
     dependencies=ADMIN_ONLY,
     response_model=CommonResponse,
     responses=FILE_OPERATION_ERROR_RESPONSES,
+)
+
+router.add_api_route(
+    "/{id}/files/upload",
+    upload_container_files_route,
+    methods=["POST"],
+    dependencies=ADMIN_ONLY,
+    response_model=CommonResponse[ContainerFileUploadResponse],
+    responses=FILE_UPLOAD_ERROR_RESPONSES,
+)
+
+router.add_api_route(
+    "/{id}/files/download",
+    download_container_files_route,
+    methods=["GET"],
+    dependencies=ADMIN_ONLY,
+    response_model=None,
+    response_class=StreamingResponse,
+    responses={
+        **FILE_OPERATION_ERROR_RESPONSES,
+        200: {
+            "description": "File stream or tar archive",
+            "content": {
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}},
+                "application/x-tar": {"schema": {"type": "string", "format": "binary"}},
+            },
+        },
+    },
 )
 
 router.add_api_route(

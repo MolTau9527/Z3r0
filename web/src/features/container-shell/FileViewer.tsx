@@ -1,7 +1,7 @@
 import { Button, Toast } from "@douyinfe/semi-ui";
 import { Download, Edit3, Save, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { readContainerFile, writeContainerFile } from "../../shared/api/sandboxContainers";
+import { downloadContainerFiles, readContainerFile, writeContainerFile } from "../../shared/api/sandboxContainers";
 import { showApiError } from "../../shared/api/feedback";
 import type { ContainerFileInfo } from "../../shared/api/types";
 import { CodeEditor } from "./CodeEditor";
@@ -124,15 +124,19 @@ export function FileViewer({ containerId, containerHash, file, onClose }: Props)
     setEditing(false);
   }, []);
 
-  const handleDownload = useCallback(() => {
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = file.name;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [content, file.name]);
+  const handleDownload = useCallback(async () => {
+    try {
+      const { blob, filename } = await downloadContainerFiles(containerId, { path: [file.path] });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showApiError(err);
+    }
+  }, [containerId, file.path]);
 
   return (
     <div className="fv-body">
@@ -147,8 +151,8 @@ export function FileViewer({ containerId, containerHash, file, onClose }: Props)
         {viewerType === "text" && !editing && (
           <Button icon={<Edit3 size={14} />} theme="borderless" size="small" onClick={handleEdit}>Edit</Button>
         )}
-        {viewerType === "text" && !editing && (
-          <Button icon={<Download size={14} />} theme="borderless" size="small" onClick={handleDownload}>Download</Button>
+        {!editing && (
+          <Button icon={<Download size={14} />} theme="borderless" size="small" onClick={() => void handleDownload()}>Download</Button>
         )}
         <Button icon={<X size={14} />} theme="borderless" size="small" type="danger" onClick={onClose}>Close</Button>
       </div>

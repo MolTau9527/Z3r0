@@ -268,6 +268,10 @@
   opacity: 0.3;
 }
 
+.file-manager-upload-input {
+  display: none;
+}
+
 .file-manager-separator {
   width: 1px;
   height: 20px;

@@ -22,15 +22,23 @@ class CommonResponseStatusMiddleware:
 
         response_start: Message | None = None
         body_parts: list[bytes] = []
+        passthrough = False
 
         async def send_wrapper(message: Message) -> None:
-            nonlocal response_start
+            nonlocal passthrough, response_start
 
             if message["type"] == "http.response.start":
                 response_start = message
+                passthrough = not _is_json_response(message)
+                if passthrough:
+                    await send(message)
                 return
 
             if message["type"] != "http.response.body" or response_start is None:
+                await send(message)
+                return
+
+            if passthrough:
                 await send(message)
                 return
 
@@ -68,6 +76,13 @@ def _sync_common_response_status(response_start: Message, body: bytes) -> Messag
         return response_start
 
     return {**response_start, "status": code}
+
+
+def _is_json_response(response_start: Message) -> bool:
+    for raw_key, raw_value in response_start.get("headers", []):
+        if raw_key.lower() == b"content-type":
+            return b"application/json" in raw_value.lower()
+    return False
 
 
 def _serialize_validation_errors(errors: list[dict]) -> list[dict]:

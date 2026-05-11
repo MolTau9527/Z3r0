@@ -1,4 +1,5 @@
-import { apiRequest, buildAuthenticatedWebSocketUrl } from "./client";
+import { clearStoredAccessToken, getStoredAccessToken } from "../auth/session";
+import { ApiError, apiRequest, buildAuthenticatedWebSocketUrl } from "./client";
 import { buildQuery } from "./query";
 import type {
   ContainerFileCopyRequest,
@@ -9,6 +10,8 @@ import type {
   ContainerFileMkdirResponse,
   ContainerFileMoveRequest,
   ContainerFileMoveResponse,
+  ContainerFileUploadRequest,
+  ContainerFileUploadResponse,
   ContainerFileWriteRequest,
   ContainerFileWriteResponse,
   CreateSandboxContainerRequest,
@@ -18,6 +21,7 @@ import type {
   GenerateDefaultSandboxContainerPortMappingsResponse,
   ListContainerFilesParams,
   ListContainerFilesResponse,
+  DownloadContainerFilesParams,
   QueryAvailableSandboxContainersParams,
   QueryAvailableSandboxContainersResponse,
   QuerySandboxContainersParams,
@@ -118,6 +122,25 @@ export function writeContainerFile(id: number, payload: ContainerFileWriteReques
   return apiRequest<ContainerFileWriteResponse>(`${SANDBOX_CONTAINERS_PATH}/${id}/files/write`, { method: "POST", body: payload });
 }
 
+export function uploadContainerFiles(
+  id: number,
+  path: ContainerFileUploadRequest["path"],
+  files: File[],
+  overwrite: ContainerFileUploadRequest["overwrite"] = true,
+) {
+  const form = new FormData();
+  form.set("path", path);
+  form.set("overwrite", String(overwrite));
+  files.forEach((file) => form.append("files", file));
+  return apiFormRequest<ContainerFileUploadResponse>(`${SANDBOX_CONTAINERS_PATH}/${id}/files/upload`, form);
+}
+
+export function downloadContainerFiles(id: number, params: DownloadContainerFilesParams) {
+  const query = new URLSearchParams();
+  params.path.forEach((path) => query.append("path", path));
+  return apiBlobRequest(`${SANDBOX_CONTAINERS_PATH}/${id}/files/download?${query.toString()}`);
+}
+
 export function copyContainerFiles(id: number, payload: ContainerFileCopyRequest) {
   return apiRequest<ContainerFileCopyResponse>(`${SANDBOX_CONTAINERS_PATH}/${id}/files/copy`, { method: "POST", body: payload });
 }
@@ -132,4 +155,73 @@ export function deleteContainerFiles(id: number, payload: ContainerFileDeleteReq
 
 export function createContainerDirectory(id: number, payload: ContainerFileMkdirRequest) {
   return apiRequest<ContainerFileMkdirResponse>(`${SANDBOX_CONTAINERS_PATH}/${id}/files/mkdir`, { method: "POST", body: payload });
+}
+
+async function apiFormRequest<ResponsePayload>(path: string, body: FormData) {
+  const headers = new Headers({ Accept: "application/json" });
+  addAuthHeader(headers);
+
+  let response: Response;
+  try {
+    response = await fetch(path, { method: "POST", headers, body });
+  } catch (error) {
+    throw new ApiError(0, { code: 0, message: error instanceof Error ? error.message : "Network request failed" });
+  }
+
+  const parsed = await parseJsonResponse(response);
+  const payloadCode = typeof parsed?.code === "number" ? parsed.code : response.status;
+  if (!response.ok || payloadCode >= 400) {
+    handleAuthExpired(response.status, payloadCode);
+    throw new ApiError(response.status, parsed);
+  }
+  return parsed as ResponsePayload;
+}
+
+async function apiBlobRequest(path: string) {
+  const headers = new Headers();
+  addAuthHeader(headers);
+
+  let response: Response;
+  try {
+    response = await fetch(path, { headers });
+  } catch (error) {
+    throw new ApiError(0, { code: 0, message: error instanceof Error ? error.message : "Network request failed" });
+  }
+
+  if (!response.ok) {
+    const parsed = await parseJsonResponse(response);
+    const payloadCode = typeof parsed?.code === "number" ? parsed.code : response.status;
+    handleAuthExpired(response.status, payloadCode);
+    throw new ApiError(response.status, parsed);
+  }
+
+  const blob = await response.blob();
+  const filename = parseContentDispositionFilename(response.headers.get("content-disposition"));
+  return { blob, filename };
+}
+
+function addAuthHeader(headers: Headers) {
+  const token = getStoredAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+}
+
+async function parseJsonResponse(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) return undefined;
+  return response.json().catch(() => undefined);
+}
+
+function handleAuthExpired(status: number, payloadCode: number) {
+  if (status !== 401 && payloadCode !== 401) return;
+  clearStoredAccessToken();
+  window.dispatchEvent(new Event("z3r0:auth-expired"));
+}
+
+function parseContentDispositionFilename(header: string | null) {
+  if (!header) return "download";
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encoded?.[1]) return decodeURIComponent(encoded[1]);
+  const quoted = /filename="([^"]+)"/i.exec(header);
+  if (quoted?.[1]) return quoted[1];
+  return "download";
 }

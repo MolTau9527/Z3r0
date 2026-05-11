@@ -6,6 +6,12 @@ type JsonRequestBody<Operation> = Operation extends {
   ? Body
   : never;
 
+type MultipartRequestBody<Operation> = Operation extends {
+  requestBody: { content: { "multipart/form-data": infer Body } };
+}
+  ? Body
+  : never;
+
 type JsonResponse<Operation> = Operation extends {
   responses: { 200: { content: { "application/json": infer Response } } };
 }
@@ -81,6 +87,9 @@ export type ReadContainerFileResponse = JsonResponse<paths["/api/sandbox-contain
 
 export type ContainerFileWriteRequest = JsonRequestBody<paths["/api/sandbox-containers/{id}/files/write"]["post"]>;
 export type ContainerFileWriteResponse = JsonResponse<paths["/api/sandbox-containers/{id}/files/write"]["post"]>;
+export type ContainerFileUploadRequest = MultipartRequestBody<paths["/api/sandbox-containers/{id}/files/upload"]["post"]>;
+export type ContainerFileUploadResponse = JsonResponse<paths["/api/sandbox-containers/{id}/files/upload"]["post"]>;
+export type DownloadContainerFilesParams = QueryParameters<paths["/api/sandbox-containers/{id}/files/download"]["get"]>;
 export type ContainerFileCopyRequest = JsonRequestBody<paths["/api/sandbox-containers/{id}/files/copy"]["post"]>;
 export type ContainerFileCopyResponse = JsonResponse<paths["/api/sandbox-containers/{id}/files/copy"]["post"]>;
 export type ContainerFileMoveRequest = JsonRequestBody<paths["/api/sandbox-containers/{id}/files/move"]["post"]>;

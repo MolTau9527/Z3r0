@@ -1,13 +1,13 @@
 import { Button, Popconfirm, Tag, Toast, Tooltip } from "@douyinfe/semi-ui";
 import {
   ArrowLeft, ArrowRight, ArrowUp, Clipboard, ClipboardPaste,
-  Copy, File, FilePlus, Folder, FolderOpen, FolderPlus, Grid3X3, List,
-  RefreshCw, Scissors, Trash2,
+  Copy, Download, File, FilePlus, Folder, FolderOpen, FolderPlus, Grid3X3, List,
+  RefreshCw, Scissors, Trash2, Upload,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   copyContainerFiles, createContainerDirectory, deleteContainerFiles,
-  listContainerFiles, moveContainerFiles, writeContainerFile,
+  downloadContainerFiles, listContainerFiles, moveContainerFiles, uploadContainerFiles, writeContainerFile,
 } from "../../shared/api/sandboxContainers";
 import { showApiError } from "../../shared/api/feedback";
 import type { ContainerFileInfo } from "../../shared/api/types";
@@ -36,6 +36,7 @@ export function ContainerFileManager({ containerId, containerHash, containerName
   const [viewingFile, setViewingFile] = useState<ContainerFileInfo | null>(null);
   const [createType, setCreateType] = useState<"file" | "dir" | null>(null);
   const requestIdRef = useRef(0);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadFiles = useCallback(async (dir: string) => {
     const requestId = requestIdRef.current + 1;
@@ -208,6 +209,45 @@ export function ContainerFileManager({ containerId, containerHash, containerName
     setCreateType(null);
   }, []);
 
+  const handleUploadClick = useCallback(() => {
+    uploadInputRef.current?.click();
+  }, []);
+
+  const handleUploadChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const uploadFiles = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (uploadFiles.length === 0) return;
+
+    setLoading(true);
+    try {
+      await uploadContainerFiles(containerId, path, uploadFiles, true);
+      Toast.success(`${uploadFiles.length} file(s) uploaded`);
+      await loadFiles(path);
+    } catch (error) {
+      showApiError(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [containerId, path, loadFiles]);
+
+  const handleDownload = useCallback(async () => {
+    if (selectedPaths.size === 0) return;
+    setLoading(true);
+    try {
+      const { blob, filename } = await downloadContainerFiles(containerId, { path: Array.from(selectedPaths) });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      showApiError(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [containerId, selectedPaths]);
+
   const breadcrumbs = useMemo(() => {
     if (path === "/") return [{ label: "/", path: "/" }];
     const parts = path.split("/").filter(Boolean);
@@ -234,6 +274,12 @@ export function ContainerFileManager({ containerId, containerHash, containerName
         <span className="file-manager-separator" />
         <Button icon={<FilePlus size={15} />} theme="borderless" disabled={toolbarDisabled || createType !== null} onClick={() => startCreate("file")} aria-label="New file" />
         <Button icon={<FolderPlus size={15} />} theme="borderless" disabled={toolbarDisabled || createType !== null} onClick={() => startCreate("dir")} aria-label="New folder" />
+        <Tooltip content="Upload files">
+          <Button icon={<Upload size={15} />} theme="borderless" disabled={toolbarDisabled} onClick={handleUploadClick} aria-label="Upload files" />
+        </Tooltip>
+        <Tooltip content="Download selected">
+          <Button icon={<Download size={15} />} theme="borderless" disabled={!hasSelection || toolbarDisabled} onClick={() => void handleDownload()} aria-label="Download selected" />
+        </Tooltip>
         <span className="file-manager-separator" />
         <Tooltip content="Copy selected">
           <Button icon={<Copy size={15} />} theme="borderless" disabled={!hasSelection || toolbarDisabled} onClick={handleCopy} aria-label="Copy" />
@@ -255,6 +301,7 @@ export function ContainerFileManager({ containerId, containerHash, containerName
           <Button icon={<Grid3X3 size={15} />} theme="borderless" type={viewMode === "icon" ? "primary" : "tertiary"} disabled={toolbarDisabled} onClick={() => setViewMode("icon")} aria-label="Icon view" />
         </Tooltip>
       </div>
+      <input ref={uploadInputRef} className="file-manager-upload-input" type="file" multiple onChange={(event) => void handleUploadChange(event)} />
 
       <div className="file-manager-breadcrumb">
         {breadcrumbs.map((crumb, i) => (

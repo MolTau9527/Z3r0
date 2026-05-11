@@ -2,9 +2,12 @@ import asyncio
 import json
 from http import HTTPStatus
 from typing import Any
+from urllib.parse import quote
 
-from fastapi import WebSocket, WebSocketDisconnect, status as ws_status
+from fastapi import UploadFile, WebSocket, WebSocketDisconnect, status as ws_status
 from fastapi.websockets import WebSocketState
+from starlette.responses import JSONResponse
+from starlette.responses import StreamingResponse
 
 from logger import get_logger
 from middleware.auth import decode_access_token
@@ -15,6 +18,7 @@ from schema.sandbox_container_schema import (
     ContainerFileMkdirRequest,
     ContainerFileMoveRequest,
     ContainerFileReadResponse,
+    ContainerFileUploadResponse,
     ContainerFileType,
     ContainerFileWriteRequest,
     CreateSandboxContainerRequest,
@@ -30,11 +34,13 @@ from service.sandbox_container_service import (
     ContainerShellSession,
     SandboxContainerMutationResult,
     SandboxContainerRecord,
+    ContainerUploadSource,
     copy_container_files,
     create_container_directory,
     create_sandbox_container,
     delete_container_files,
     delete_sandbox_container,
+    download_container_paths,
     generate_default_sandbox_container_port_mappings,
     get_container_file_info,
     list_container_files,
@@ -49,6 +55,7 @@ from service.sandbox_container_service import (
     resolve_shell_container,
     start_sandbox_container,
     stop_sandbox_container,
+    upload_container_files,
     write_container_file,
     write_container_shell,
 )
@@ -301,6 +308,13 @@ def _file_container_error(code: int, message: str) -> CommonResponse:
     return CommonResponse(code=code, message=message)
 
 
+def _file_container_json_error(code: int, message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=code,
+        content=_file_container_error(code, message).model_dump(),
+    )
+
+
 async def _resolve_running_container(id: int, action: str) -> tuple[str, CommonResponse | None]:
     """Resolve container and check it is running. Returns (hash, error_or_none)."""
     resolved = await resolve_file_container(id)
@@ -357,6 +371,66 @@ async def handle_write_file(id: int, body: ContainerFileWriteRequest) -> CommonR
     if not ok:
         return _file_container_error(HTTPStatus.INTERNAL_SERVER_ERROR.value, "failed to write container file")
     return _file_container_common_response(message="file written")
+
+
+async def handle_upload_files(
+    id: int,
+    path: str,
+    files: list[UploadFile],
+    overwrite: bool,
+) -> CommonResponse:
+    container_hash, error = await _resolve_running_container(id, "upload files")
+    if error:
+        return error
+    if not files:
+        return _file_container_error(HTTPStatus.BAD_REQUEST.value, "no files uploaded")
+
+    try:
+        sources = [ContainerUploadSource(filename=file.filename or "", stream=file.file) for file in files]
+        uploaded = await upload_container_files(container_hash, path, sources, overwrite)
+    except ValueError as exc:
+        return _file_container_error(HTTPStatus.BAD_REQUEST.value, str(exc))
+    except FileExistsError as exc:
+        return _file_container_error(HTTPStatus.CONFLICT.value, str(exc))
+    except FileNotFoundError as exc:
+        return _file_container_error(HTTPStatus.NOT_FOUND.value, str(exc))
+    except Exception:
+        logger.exception("failed to upload container files: %s", id)
+        return _file_container_error(HTTPStatus.INTERNAL_SERVER_ERROR.value, "failed to upload container files")
+
+    return _file_container_common_response(
+        data=ContainerFileUploadResponse(path=path, files=uploaded),
+        message="files uploaded",
+    )
+
+
+async def handle_download_files(id: int, paths: list[str]) -> StreamingResponse | JSONResponse:
+    container_hash, error = await _resolve_running_container(id, "download files")
+    if error:
+        return JSONResponse(status_code=error.code, content=error.model_dump())
+    if not paths:
+        return _file_container_json_error(HTTPStatus.BAD_REQUEST.value, "download path is required")
+
+    try:
+        download = await download_container_paths(container_hash, paths)
+    except ValueError as exc:
+        return _file_container_json_error(HTTPStatus.BAD_REQUEST.value, str(exc))
+    except FileNotFoundError as exc:
+        return _file_container_json_error(HTTPStatus.NOT_FOUND.value, str(exc))
+    except Exception:
+        logger.exception("failed to download container files: %s", id)
+        return _file_container_json_error(HTTPStatus.INTERNAL_SERVER_ERROR.value, "failed to download container files")
+
+    filename = download.filename.replace('"', "_")
+    encoded_filename = quote(download.filename)
+    return StreamingResponse(
+        download.chunks,
+        media_type=download.media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{encoded_filename}",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 async def handle_copy_files(id: int, body: ContainerFileCopyRequest) -> CommonResponse:

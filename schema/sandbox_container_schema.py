@@ -138,6 +138,17 @@ class ContainerFileReadResponse(BaseModel):
     size: int
 
 
+class ContainerFileUploadItem(BaseModel):
+    name: str
+    path: str
+    size: int
+
+
+class ContainerFileUploadResponse(BaseModel):
+    path: str
+    files: list[ContainerFileUploadItem]
+
+
 class ContainerFileWriteRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
     content: str = Field(min_length=0, max_length=1_048_576)

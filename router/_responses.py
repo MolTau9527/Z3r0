@@ -15,6 +15,10 @@ INTERNAL_ERROR_RESPONSE = {
     500: {"description": "Internal Server Error", "model": CommonResponse},
 }
 
+CONFLICT_RESPONSE = {
+    409: {"description": "Conflict", "model": CommonResponse},
+}
+
 
 def not_found_response(resource: str) -> dict:
     return {404: {"description": f"{resource} not found", "model": CommonResponse}}

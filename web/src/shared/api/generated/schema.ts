@@ -193,6 +193,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sandbox-containers/{id}/files/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Container Files Route */
+        get: operations["download_container_files_route_api_sandbox_containers__id__files_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sandbox-containers/{id}/files/mkdir": {
         parameters: {
             query?: never;
@@ -238,6 +255,23 @@ export interface paths {
         get: operations["read_container_file_route_api_sandbox_containers__id__files_read_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sandbox-containers/{id}/files/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Container Files Route */
+        post: operations["upload_container_files_route_api_sandbox_containers__id__files_upload_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -582,6 +616,21 @@ export interface components {
          * @enum {string}
          */
         AgentSubordinateStatus: "running" | "completed" | "failed" | "canceled";
+        /** Body_upload_container_files_route_api_sandbox_containers__id__files_upload_post */
+        Body_upload_container_files_route_api_sandbox_containers__id__files_upload_post: {
+            /** Files */
+            files: string[];
+            /**
+             * Overwrite
+             * @default true
+             */
+            overwrite: boolean;
+            /**
+             * Path
+             * @default /
+             */
+            path: string;
+        };
         /** CommonResponse */
         CommonResponse: {
             /**
@@ -620,6 +669,20 @@ export interface components {
              */
             code: number;
             data?: components["schemas"]["ContainerFileReadResponse"] | null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+        };
+        /** CommonResponse[ContainerFileUploadResponse] */
+        CommonResponse_ContainerFileUploadResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data?: components["schemas"]["ContainerFileUploadResponse"] | null;
             /**
              * Message
              * @default success
@@ -948,6 +1011,22 @@ export interface components {
          * @enum {string}
          */
         ContainerFileType: "file" | "directory" | "symlink";
+        /** ContainerFileUploadItem */
+        ContainerFileUploadItem: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+        };
+        /** ContainerFileUploadResponse */
+        ContainerFileUploadResponse: {
+            /** Files */
+            files: components["schemas"]["ContainerFileUploadItem"][];
+            /** Path */
+            path: string;
+        };
         /** ContainerFileWriteRequest */
         ContainerFileWriteRequest: {
             /** Content */
@@ -2351,6 +2430,85 @@ export interface operations {
             };
         };
     };
+    download_container_files_route_api_sandbox_containers__id__files_download_get: {
+        parameters: {
+            query: {
+                path: string[];
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description File stream or tar archive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                    "application/x-tar": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Sandbox container not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse"];
+                };
+            };
+        };
+    };
     mkdir_container_files_route_api_sandbox_containers__id__files_mkdir_post: {
         parameters: {
             query?: never;
@@ -2568,6 +2726,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse"];
+                };
+            };
+        };
+    };
+    upload_container_files_route_api_sandbox_containers__id__files_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_container_files_route_api_sandbox_containers__id__files_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_ContainerFileUploadResponse_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Sandbox container not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse_Any_"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommonResponse"];
                 };
             };
             /** @description Validation Error */
