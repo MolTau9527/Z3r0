@@ -74,6 +74,7 @@ def build_subagent_tools(
     *,
     get_child_agent: Callable[[str], Agent],
     get_code_to_name: Callable[[], dict[str, str]],
+    allow_wait: bool = True,
 ) -> list[Tool]:
     allowed = {code: code for code in mounted_codes}
     allowed_codes = ", ".join(sorted(allowed))
@@ -115,7 +116,13 @@ def build_subagent_tools(
         except asyncio.CancelledError:
             starter.add_done_callback(_log_subagent_start_result)
             raise
-        return _tool_response(task=snapshot, message="subagent task started")
+        return _tool_response(
+            task=snapshot,
+            message=(
+                "subagent task started; end this turn now and wait for the async completion notification "
+                "before taking over again"
+            ),
+        )
 
     async def read_subagent_task(ctx: RunContextWrapper[AgentRuntimeContext], run_id: str) -> str:
         """Read current status/result/error/progress for a subagent task."""
@@ -152,19 +159,14 @@ def build_subagent_tools(
         latest = await cancel_subagent_task_run(snapshot)
         return _tool_response(task=latest, message="subagent task cancel requested")
 
-    return [
+    tools = [
         function_tool(
             start_subagent_task,
             name_override="start_subagent_task",
             description_override=(
-                "Start a configured subagent by code and return a persistent run id. "
+                "Start a configured subagent by code, return a persistent run id, then end the current turn. "
                 f"Allowed agent_code values: {allowed_codes}."
             ),
-        ),
-        function_tool(
-            wait_subagent_task,
-            name_override="wait_subagent_task",
-            description_override="Wait for a persistent subagent run id, returning result if done or current status if still running.",
         ),
         function_tool(
             read_subagent_task,
@@ -182,6 +184,18 @@ def build_subagent_tools(
             description_override="Cancel a persistent subagent run id when practical.",
         ),
     ]
+    if allow_wait:
+        tools.insert(
+            1,
+            function_tool(
+                wait_subagent_task,
+                name_override="wait_subagent_task",
+                description_override=(
+                    "Wait for a persistent subagent run id, returning result if done or current status if still running."
+                ),
+            ),
+        )
+    return tools
 
 
 async def _resolve_task(ctx: RunContextWrapper[AgentRuntimeContext], run_id: str) -> AgentSubordinateTaskSnapshot | None:

@@ -27,6 +27,7 @@ class ToolMount:
 @dataclass(frozen=True, slots=True)
 class SubagentMount:
     code: str
+    allow_wait: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,9 +67,11 @@ _AGENT_SPECS: tuple[AgentSpec, ...] = (
         subagents=(
             SubagentMount(
                 code="cie",
+                allow_wait=False,
             ),
             SubagentMount(
                 code="cpe",
+                allow_wait=False,
             ),
         ),
     ),
@@ -150,12 +153,7 @@ class AgentRegistry:
             child_graph.get(mount.code)  # eager build catches circular mounts at boot
         if spec.subagents:
             tools.extend(
-                subordinates.build_subagent_tools(
-                    spec.code,
-                    (mount.code for mount in spec.subagents),
-                    get_child_agent=lambda code: graph.child(code).get(code),
-                    get_code_to_name=graph.code_to_name,
-                )
+                _build_subagent_tools(spec, graph)
             )
 
         return Agent(
@@ -215,6 +213,16 @@ class SessionAgentGraph:
 
 def _has_tool(spec: AgentSpec, tool: Tool) -> bool:
     return any(mount.tool is tool for mount in spec.tools)
+
+
+def _build_subagent_tools(spec: AgentSpec, graph: SessionAgentGraph) -> list[Tool]:
+    return subordinates.build_subagent_tools(
+        spec.code,
+        (mount.code for mount in spec.subagents),
+        get_child_agent=lambda code: graph.child(code).get(code),
+        get_code_to_name=graph.code_to_name,
+        allow_wait=any(mount.allow_wait for mount in spec.subagents),
+    )
 
 
 def _build_instructions(
