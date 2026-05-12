@@ -1,11 +1,16 @@
-.git
-.gitignore
-.gitattributes
+**
 
-*.log
-*.tmp
-
-build.sh
+!Dockerfile
+!entrypoint.sh
+!supervisord.conf
+!proxy/
+!proxy/go.mod
+!proxy/main.go
+!.agents/
+!.agents/skills/
+!.agents/skills/**
 
 **/.DS_Store
 **/Thumbs.db
+**/*.log
+**/*.tmp
