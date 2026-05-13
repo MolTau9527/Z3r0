@@ -290,8 +290,17 @@ def _build_sandbox_skill_instructions(skill_metadata: tuple[str, ...]) -> str:
             "No sandbox skill metadata is available."
         )
 
+    usage = (
+        "Use matching sandbox skills to complete tasks. Metadata is only an index; "
+        "load the full skill body before applying any skill.\n\n"
+        "Rules:\n\n"
+        "- Before executing any command, first call `load_skill` for `sandbox-shell` if it is listed.\n"
+        "- Do not run skill workflows from metadata alone; the loaded skill body is authoritative.\n"
+        "- After loading a skill, follow its workflow and constraints exactly.\n"
+    )
     return (
         "\n\n# Sandbox Skills\n\n"
-        "Available skill metadata. Only metadata is shown; read the skill body before applying.\n\n"
+        + usage
+        + "\nAvailable skill metadata:\n\n"
         + "\n\n".join(skill_metadata)
     )
