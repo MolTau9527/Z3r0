@@ -76,6 +76,8 @@ async def update_work_project_agent_summary(
     Args:
         summary: Full replacement of this agent's current summary. Include task_id/task_title,
             progress, status, findings, decisions, blockers, next_steps, evidence, and notes as applicable.
+            When task_id or exact task_title matches a shared task, that task's progress is synchronized
+            and project progress is recalculated.
     """
     agent_code = ctx.context.agent_code.strip()
     if not agent_code:
@@ -109,10 +111,18 @@ async def update_work_project_agent_summary(
         if updated_project_id is None:
             await session.rollback()
             return _error("WorkProject not found.")
-        await session.commit()
-        project = await session.get(WorkProject, project_id)
+        project = (await session.exec(
+            select(WorkProject)
+            .where(WorkProject.id == project_id)
+            .with_for_update()
+        )).first()
         if project is None:
+            await session.rollback()
             return _error("WorkProject not found.")
+        _sync_summary_progress_to_task(project, summary)
+        session.add(project)
+        await session.commit()
+        await session.refresh(project)
 
     return _success(_agent_summaries_payload(project))
 
@@ -209,6 +219,31 @@ def _agent_summaries_payload(project: WorkProject) -> dict:
         "project_id": project.id,
         "agent_summaries": summaries,
     }
+
+
+def _sync_summary_progress_to_task(
+    project: WorkProject,
+    summary: WorkProjectAgentSummaryContentSchema,
+) -> None:
+    task_id = summary.task_id.strip()
+    task_title = summary.task_title.strip()
+    if not task_id and not task_title:
+        return
+
+    tasks: list[dict] = []
+    changed = False
+    for raw_task in project.tasks:
+        task = WorkProjectTaskSchema.model_validate(raw_task)
+        if task.id == task_id or (not task_id and task.title == task_title):
+            task.progress = summary.progress
+            changed = True
+        tasks.append(task.model_dump(mode="json"))
+
+    if not changed:
+        return
+    project.tasks = tasks
+    project.progress = calculate_work_project_progress(tasks)
+    project.status = derive_work_project_status(tasks, project.status)
 
 
 def _success(payload: object) -> str:
