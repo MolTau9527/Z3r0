@@ -26,6 +26,7 @@ class UpdateAgentConfigRequest(BaseModel):
     base_url: str
     api_key: str
     model: str
+    use_responses: bool
     context_window: int = Field(ge=0)
 
 

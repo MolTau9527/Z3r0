@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from agents import Agent, ModelSettings, Tool
-from agents.extensions.models.litellm_model import LitellmModel
+from agents import Agent, Model, ModelSettings, Tool
 
 from config import AgentConfig, WORKSPACE, get_config
 from core.agent.instructions import build_instructions
+from core.agent.models import build_openai_model
 from core.agent.specs import AGENT_SPECS, AgentSpec, ToolMount
 from core.delegation.subagents import build_subagent_tools
 from core.runtime.context import AgentRuntimeContext
@@ -108,7 +108,7 @@ class AgentRegistry:
 
         return Agent(
             name=cfg.name,
-            model=LitellmModel(base_url=cfg.base_url, api_key=cfg.api_key, model=cfg.model),
+            model=build_openai_model(cfg),
             model_settings=ModelSettings(parallel_tool_calls=False),
             instructions=instructions,
             tools=tools,
@@ -120,6 +120,7 @@ class SessionAgentGraph:
         self._registry = registry
         self.tool_snapshot = tool_snapshot
         self._agents: dict[str, Agent] = {}
+        self._models: list[Model] = []
         self._building: set[str] = set()
         self._children: dict[str, SessionAgentGraph] = {}
 
@@ -142,6 +143,7 @@ class SessionAgentGraph:
         try:
             agent = self._registry._build(spec, cfg, self)
             self._agents[agent_code] = agent
+            self._models.append(agent.model)
             return agent
         finally:
             self._building.discard(agent_code)
@@ -154,11 +156,14 @@ class SessionAgentGraph:
             self._children[mount_code] = child
         return child
 
-    def close(self) -> None:
+    async def close(self) -> None:
         for child in self._children.values():
-            child.close()
+            await child.close()
+        for model in self._models:
+            await model.close()
         self._children.clear()
         self._agents.clear()
+        self._models.clear()
         self._building.clear()
 
 

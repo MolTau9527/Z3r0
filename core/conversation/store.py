@@ -18,8 +18,7 @@ from core.conversation.compaction import (
     compact_if_needed as compact_session_context_if_needed,
     get_latest_compaction,
 )
-from core.conversation.projection_types import ContextProjection
-from core.conversation.projection import project_context
+from core.conversation.projection import ContextProjection, project_context
 from model.agent.message_meta import AgentMessageMeta
 from utils.sdk_tables import agent_messages
 
@@ -155,8 +154,14 @@ class Z3r0Session(SQLAlchemySession):
         )
 
 
-async def fetch_stored_items(sess: AsyncSession, session_id: str) -> list[StoredItem]:
-    """Load all messages + their owner attribution for one conversation, in order."""
+async def fetch_stored_items(
+    sess: AsyncSession,
+    session_id: str,
+    *,
+    before_id: int | None = None,
+    limit: int | None = None,
+) -> list[StoredItem]:
+    """Load messages + owner attribution for one conversation, in ascending order."""
     meta_table = AgentMessageMeta.__table__
     stmt = (
         select(
@@ -171,8 +176,13 @@ async def fetch_stored_items(sess: AsyncSession, session_id: str) -> list[Stored
             agent_messages.outerjoin(meta_table, agent_messages.c.id == meta_table.c.message_id)
         )
         .where(agent_messages.c.session_id == session_id)
-        .order_by(agent_messages.c.created_at.asc(), agent_messages.c.id.asc())
     )
+    if before_id is not None:
+        stmt = stmt.where(agent_messages.c.id < before_id)
+    if limit is None:
+        stmt = stmt.order_by(agent_messages.c.created_at.asc(), agent_messages.c.id.asc())
+    else:
+        stmt = stmt.order_by(agent_messages.c.created_at.desc(), agent_messages.c.id.desc()).limit(limit)
     result = await sess.execute(stmt)
 
     items: list[StoredItem] = []
@@ -191,4 +201,4 @@ async def fetch_stored_items(sess: AsyncSession, session_id: str) -> list[Stored
             nested_for=row.nested_for or "",
             nested_call_id=row.nested_call_id or "",
         ))
-    return items
+    return items if limit is None else list(reversed(items))

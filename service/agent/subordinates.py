@@ -101,6 +101,24 @@ async def has_running_subagent_tasks(*, session_id: str) -> bool:
         return run_id is not None
 
 
+async def has_running_child_subagent_tasks(
+    *,
+    session_id: str,
+    parent_agent_instance_id: str,
+) -> bool:
+    async with get_async_session() as session:
+        run_id = (await session.exec(
+            select(AgentSubordinateTask.run_id)
+            .where(
+                AgentSubordinateTask.session_id == session_id,
+                AgentSubordinateTask.parent_agent_instance_id == parent_agent_instance_id,
+                AgentSubordinateTask.status == AgentSubordinateStatus.RUNNING.value,
+            )
+            .limit(1)
+        )).first()
+        return run_id is not None
+
+
 async def get_subagent_task_internal(run_id: str) -> AgentSubordinateTaskSnapshot | None:
     async with get_async_session() as session:
         task = await session.get(AgentSubordinateTask, run_id)
@@ -139,6 +157,19 @@ async def cancel_running_subagent_tasks_for_session(
     return await _cancel_running_subagent_tasks(error=error, session_id=session_id)
 
 
+async def cancel_running_child_subagent_tasks(
+    *,
+    session_id: str,
+    parent_agent_instance_id: str,
+    error: str = "",
+) -> list[AgentSubordinateTaskSnapshot]:
+    return await _cancel_running_subagent_tasks(
+        error=error,
+        session_id=session_id,
+        parent_agent_instance_id=parent_agent_instance_id,
+    )
+
+
 async def cancel_running_subagent_tasks(error: str = "") -> list[AgentSubordinateTaskSnapshot]:
     return await _cancel_running_subagent_tasks(error=error)
 
@@ -147,6 +178,7 @@ async def _cancel_running_subagent_tasks(
     *,
     error: str = "",
     session_id: str | None = None,
+    parent_agent_instance_id: str | None = None,
 ) -> list[AgentSubordinateTaskSnapshot]:
     now = datetime.now()
     async with get_async_session() as session:
@@ -155,6 +187,8 @@ async def _cancel_running_subagent_tasks(
         )
         if session_id is not None:
             statement = statement.where(AgentSubordinateTask.session_id == session_id)
+        if parent_agent_instance_id is not None:
+            statement = statement.where(AgentSubordinateTask.parent_agent_instance_id == parent_agent_instance_id)
         rows = (await session.exec(statement)).all()
         for task in rows:
             task.status = AgentSubordinateStatus.CANCELED.value

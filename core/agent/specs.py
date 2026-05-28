@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from agents import Tool
 
+from core.agent.constants import DEFAULT_AGENT_CODE
 from core.tools.knowledge import create_knowledge, find_knowledge, load_knowledge, update_knowledge
 from core.tools.work_project import (
     load_work_project_agent_summaries,
@@ -15,7 +16,9 @@ from core.tools.sandbox import (
     cancel_sandbox_async_job,
     execute_async_command,
     execute_sync_command,
+    list_sandbox_async_jobs,
     load_skill,
+    read_sandbox_command_output,
     wait_sandbox_async_job,
 )
 
@@ -54,6 +57,16 @@ WORK_PROJECT_TOOLS = (
     ToolMount(update_work_project_agent_summary, requires_work_project=True),
 )
 
+SANDBOX_TOOLS = (
+    ToolMount(execute_sync_command, requires_sandbox_container=True),
+    ToolMount(read_sandbox_command_output, requires_sandbox_container=True),
+    ToolMount(execute_async_command, requires_sandbox_container=True),
+    ToolMount(list_sandbox_async_jobs, requires_sandbox_container=True),
+    ToolMount(wait_sandbox_async_job, requires_sandbox_container=True),
+    ToolMount(cancel_sandbox_async_job, requires_sandbox_container=True),
+    ToolMount(load_skill, requires_sandbox_container=True),
+)
+
 
 AGENT_SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
@@ -74,11 +87,7 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
         code="cae",
         tools=(
-            ToolMount(execute_sync_command, requires_sandbox_container=True),
-            ToolMount(execute_async_command, requires_sandbox_container=True),
-            ToolMount(wait_sandbox_async_job, requires_sandbox_container=True),
-            ToolMount(cancel_sandbox_async_job, requires_sandbox_container=True),
-            ToolMount(load_skill, requires_sandbox_container=True),
+            *SANDBOX_TOOLS,
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
         ),
@@ -86,11 +95,7 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
         code="cce",
         tools=(
-            ToolMount(execute_sync_command, requires_sandbox_container=True),
-            ToolMount(execute_async_command, requires_sandbox_container=True),
-            ToolMount(wait_sandbox_async_job, requires_sandbox_container=True),
-            ToolMount(cancel_sandbox_async_job, requires_sandbox_container=True),
-            ToolMount(load_skill, requires_sandbox_container=True),
+            *SANDBOX_TOOLS,
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
         ),
@@ -98,11 +103,7 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
         code="cie",
         tools=(
-            ToolMount(execute_sync_command, requires_sandbox_container=True),
-            ToolMount(execute_async_command, requires_sandbox_container=True),
-            ToolMount(wait_sandbox_async_job, requires_sandbox_container=True),
-            ToolMount(cancel_sandbox_async_job, requires_sandbox_container=True),
-            ToolMount(load_skill, requires_sandbox_container=True),
+            *SANDBOX_TOOLS,
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
         ),
@@ -110,11 +111,7 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
         code="cpe",
         tools=(
-            ToolMount(execute_sync_command, requires_sandbox_container=True),
-            ToolMount(execute_async_command, requires_sandbox_container=True),
-            ToolMount(wait_sandbox_async_job, requires_sandbox_container=True),
-            ToolMount(cancel_sandbox_async_job, requires_sandbox_container=True),
-            ToolMount(load_skill, requires_sandbox_container=True),
+            *SANDBOX_TOOLS,
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
         ),
@@ -122,16 +119,9 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
         code="cre",
         tools=(
-            ToolMount(execute_sync_command, requires_sandbox_container=True),
-            ToolMount(execute_async_command, requires_sandbox_container=True),
-            ToolMount(wait_sandbox_async_job, requires_sandbox_container=True),
-            ToolMount(cancel_sandbox_async_job, requires_sandbox_container=True),
-            ToolMount(load_skill, requires_sandbox_container=True),
+            *SANDBOX_TOOLS,
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
         ),
     ),
 )
-
-
-DEFAULT_AGENT_CODE = AGENT_SPECS[0].code

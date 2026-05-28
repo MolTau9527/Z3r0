@@ -66,6 +66,8 @@ async def flush_partial_context(
         await memory_session.add_items(items)
     except Exception:
         logger.warning("failed to inject partial %s context", log_label, exc_info=True)
+    else:
+        buffers.clear()
 
 
 def _partial_assistant_item(buf: DeltaBuffer) -> TResponseInputItem:

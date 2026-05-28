@@ -10,6 +10,7 @@ from database import get_async_session
 from logger import get_logger
 from model.sandbox.containers import SandboxContainer
 from schema.sandbox.containers import SandboxContainerStatus
+from service.sandbox import close_docker_response_sync as _close_shell_response_sync
 from service.sandbox.docker_ops import (
     docker_status_to_sandbox_status,
     inspect_container_state_sync,
@@ -198,25 +199,6 @@ def _shutdown_shell_socket_sync(socket: object) -> None:
     if callable(shutdown):
         try:
             shutdown(py_socket.SHUT_RDWR)
-        except Exception:
-            pass
-
-
-def _close_shell_response_sync(socket: object, response: object | None) -> None:
-    if response is None:
-        response = getattr(socket, "_response", None)
-
-    close = getattr(response, "close", None)
-    if callable(close):
-        try:
-            close()
-        except Exception:
-            pass
-
-    if response is not None:
-        try:
-            if getattr(socket, "_response", None) is response:
-                setattr(socket, "_response", None)
         except Exception:
             pass
 

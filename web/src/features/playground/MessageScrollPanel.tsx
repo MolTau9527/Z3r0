@@ -1,6 +1,6 @@
 import { Button, Spin } from "@douyinfe/semi-ui";
 import { ArrowDown } from "lucide-react";
-import { ReactNode, RefObject, useRef } from "react";
+import { ReactNode, RefObject, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useAutoFollowScroll } from "./useAutoFollowScroll";
 
 type MessageScrollPanelProps = {
@@ -10,9 +10,11 @@ type MessageScrollPanelProps = {
   contentClassName?: string;
   enabled?: boolean;
   loading?: boolean;
+  loadingPrevious?: boolean;
+  onLoadPrevious?: () => void;
+  preserveScrollKey?: string | number | null;
   resetKey?: string | number | null;
   scrollButtonClassName?: string;
-  spinClassName?: string;
   watch?: readonly unknown[];
 };
 
@@ -23,12 +25,29 @@ export function MessageScrollPanel({
   contentClassName = "",
   enabled = true,
   loading = false,
+  loadingPrevious = false,
+  onLoadPrevious,
+  preserveScrollKey,
   resetKey,
   scrollButtonClassName = "",
-  spinClassName = "",
   watch = [],
 }: MessageScrollPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const previousHeightRef = useRef(0);
+  const loadPreviousThrottleRef = useRef(false);
+
+  useEffect(() => {
+    if (!loadingPrevious) loadPreviousThrottleRef.current = false;
+  }, [loadingPrevious]);
+
+  const onScrollToTop = useCallback(() => {
+    const container = containerRef.current;
+    if (!container || !onLoadPrevious || loading || loadingPrevious || loadPreviousThrottleRef.current) return;
+    loadPreviousThrottleRef.current = true;
+    previousHeightRef.current = container.scrollHeight;
+    onLoadPrevious();
+  }, [loading, loadingPrevious, onLoadPrevious]);
+
   const {
     following,
     tailRef,
@@ -39,24 +58,41 @@ export function MessageScrollPanel({
     containerRef,
     resetKey,
     watch,
+    suspendAutoFollow: Boolean(previousHeightRef.current) || loadingPrevious,
+    onScrollToTop,
   });
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const previousHeight = previousHeightRef.current;
+    if (!container || !previousHeight) return;
+    const nextScrollTop = container.scrollTop + container.scrollHeight - previousHeight;
+    container.style.overflowAnchor = "none";
+    container.scrollTop = nextScrollTop;
+    previousHeightRef.current = 0;
+    window.requestAnimationFrame(() => {
+      if (containerRef.current === container) container.style.overflowAnchor = "";
+    });
+  }, [preserveScrollKey]);
 
   return (
     <div className={`message-scroll-shell${className ? ` ${className}` : ""}`}>
       <div
         ref={containerRef}
-        className={`message-scroll-viewport${contentClassName ? ` ${contentClassName}` : ""}`}
+        className="message-scroll-viewport"
         aria-label={ariaLabel}
+        aria-busy={loading}
         {...scrollHandlers}
       >
-        {loading ? (
-          <Spin spinning wrapperClassName={`message-scroll-spin${spinClassName ? ` ${spinClassName}` : ""}`}>
-            {children(tailRef)}
-          </Spin>
-        ) : (
-          children(tailRef)
-        )}
+        <div className={`message-scroll-content${contentClassName ? ` ${contentClassName}` : ""}`}>
+          {children(tailRef)}
+        </div>
       </div>
+      {loading ? (
+        <div className="message-scroll-loading" aria-hidden="true">
+          <Spin spinning />
+        </div>
+      ) : null}
       {enabled && !following ? (
         <Button
           className={`message-scroll-tail-floating${scrollButtonClassName ? ` ${scrollButtonClassName}` : ""}`}

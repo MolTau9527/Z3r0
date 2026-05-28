@@ -31,7 +31,7 @@ Z3r0 is a controlled multi-agent workbench for authorized security assessment, c
 - **Clear role boundaries**: a coordinator decomposes the task, while specialist agents handle intelligence, penetration validation, code audit, reverse engineering, and cryptographic review within defined scopes.
 - **Traceable work**: sessions, tool calls, delegation jobs, and streamed events are persisted so reviews can be resumed and audited.
 - **Controlled execution**: command execution, browser access, file management, and GUI tooling run through bound Docker sandboxes.
-- **Model abstraction**: model access is kept behind runtime and role interfaces, with support for LiteLLM and OpenAI-compatible providers.
+- **Model abstraction**: model access is kept behind runtime and role interfaces, using native OpenAI-compatible providers with configurable Chat Completions or Responses mode.
 
 ## Architecture
 

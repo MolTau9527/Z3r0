@@ -9,6 +9,7 @@ from fastapi.websockets import WebSocketState
 from starlette.responses import JSONResponse
 from starlette.responses import StreamingResponse
 
+from handler import cancel_ws_task as _cancel_task, close_ws_silently as _close_silently
 from logger import get_logger
 from middleware.auth import decode_access_token
 from schema.common.responses import CommonResponse
@@ -254,23 +255,6 @@ async def _forward_shell_output(websocket: WebSocket, shell: ContainerShellSessi
         await websocket.send_bytes(data)
 
 
-async def _cancel_task(task: asyncio.Task | None) -> None:
-    if task is None:
-        return
-    if task.done():
-        try:
-            task.result()
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            pass
-        return
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-
 
 async def _finish_reader_task(task: asyncio.Task | None) -> None:
     if task is None:
@@ -284,12 +268,6 @@ async def _finish_reader_task(task: asyncio.Task | None) -> None:
     except Exception:
         logger.debug("container shell reader stopped with error", exc_info=True)
 
-
-async def _close_silently(websocket: WebSocket, code: int = ws_status.WS_1011_INTERNAL_ERROR) -> None:
-    try:
-        await websocket.close(code=code)
-    except Exception:
-        pass
 
 
 def _is_admin_ws_token(token: str) -> bool:

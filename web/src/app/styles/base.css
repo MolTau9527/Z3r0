@@ -16,6 +16,12 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 body {
   min-width: 320px;
   margin: 0;
@@ -136,11 +142,7 @@ a,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .route-transition,
   .login-panel,
-  .metric-card,
-  .table-panel,
-  .resource-table-row,
   .session-row,
   .chat-row,
   .agent-picker,

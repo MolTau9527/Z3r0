@@ -2,7 +2,7 @@ import { Button } from "@douyinfe/semi-ui";
 import { GitBranch, X } from "lucide-react";
 import { useMemo } from "react";
 import type { AgentInfo } from "../../shared/api/types";
-import type { ChatNode, SubagentExecutionItem } from "./playgroundReducer";
+import type { ChatNode, SubagentExecutionItem } from "./chatState";
 import {
   findSubagentTarget,
   type SubagentSelection,
@@ -10,7 +10,8 @@ import {
   type SubagentTarget,
 } from "./subagentView";
 import { MessageScrollPanel } from "./MessageScrollPanel";
-import { ExecutionSection, SubagentStatusTag, TranscriptContent } from "./Transcript";
+import { TranscriptContent } from "./Transcript";
+import { ExecutionSection, SubagentStatusTag } from "./TranscriptExecutions";
 
 export function SubagentSidePanel({
   nodes,
@@ -101,32 +102,33 @@ function SubagentTargetView({ target }: { target: SubagentTarget }) {
 }
 
 function SubagentRunView({ run }: { run: SubagentTarget["runs"][number] }) {
-  if (run.transcript) {
-    return (
-      <div className="subagent-task-view">
-        <SubagentTaskMeta item={run.task} />
-        <TranscriptContent
-          transcript={run.transcript}
-          live={run.live}
-          emptyText="No subagent output yet."
-          allowSubagentOpen={false}
-        />
-      </div>
-    );
-  }
-
-  const failed = run.task.status === "failed" || run.task.status === "canceled";
-  const label = run.task.status === "running" ? "Progress" : failed ? "Error" : "Result";
-  const body = run.task.status === "running"
-    ? run.task.progress || "Running"
-    : run.task.result || run.task.error || "(empty)";
+  const body = run.transcript ? (
+    <TranscriptContent
+      transcript={run.transcript}
+      live={run.live}
+      emptyText="No subagent output yet."
+      allowSubagentOpen={false}
+    />
+  ) : (
+    <SubagentFallbackResult task={run.task} />
+  );
 
   return (
     <div className="subagent-task-view">
       <SubagentTaskMeta item={run.task} />
-      <ExecutionSection label={label} body={body} tone={failed ? "error" : undefined} />
+      {body}
     </div>
   );
+}
+
+function SubagentFallbackResult({ task }: { task: SubagentExecutionItem }) {
+  const failed = task.status === "failed" || task.status === "canceled";
+  const label = task.status === "running" ? "Progress" : failed ? "Error" : "Result";
+  const body = task.status === "running"
+    ? task.progress || "Running"
+    : task.result || task.error || "(empty)";
+
+  return <ExecutionSection label={label} body={body} tone={failed ? "error" : undefined} />;
 }
 
 function SubagentTaskMeta({ item }: { item: SubagentExecutionItem }) {

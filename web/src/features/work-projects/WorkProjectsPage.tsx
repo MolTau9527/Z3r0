@@ -41,14 +41,13 @@ import {
   workProjectOwnerNames,
 } from "./workProjectView";
 
-const DEFAULT_PAGE_SIZE = 10;
 type AdminAction = "cancel" | "retry" | "delete";
 
 export function WorkProjectsPage() {
   const {
     items: projects, page, keyword, loading, loadItems: loadProjects, total, rangeStart, rangeEnd,
     setKeyword, search, previous, next, canGoBack, canGoNext,
-  } = usePagedResourceList<WorkProject>({ pageSize: DEFAULT_PAGE_SIZE, query: queryWorkProjects });
+  } = usePagedResourceList<WorkProject>({ query: queryWorkProjects });
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<WorkProject | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -59,17 +58,15 @@ export function WorkProjectsPage() {
     await loadProjects();
   }, [loadProjects]);
 
-  const openCreateModal = useCallback(() => {
-    setEditingProject(null);
-    setModalOpen(true);
-  }, []);
-  const refreshProjects = useCallback(() => void refreshAll(), [refreshAll]);
   useAdminResourceHeader({
     createLabel: "Create Project",
     refreshLabel: "Refresh work projects",
     loading,
-    onCreate: openCreateModal,
-    onRefresh: refreshProjects,
+    onCreate: () => {
+      setEditingProject(null);
+      setModalOpen(true);
+    },
+    onRefresh: refreshAll,
   });
 
   const { saving, submit } = useResourceSubmit({

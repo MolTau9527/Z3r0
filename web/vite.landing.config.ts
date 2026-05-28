@@ -85,7 +85,6 @@ function landingIndexHtml(): Plugin {
       const html = bundle["landing.html"];
       if (!html || html.type !== "asset") return;
       html.fileName = "index.html";
-      bundle["index.html"] = html;
       delete bundle["landing.html"];
     },
   };

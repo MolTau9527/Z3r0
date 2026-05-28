@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class AgentNotificationKind(StrEnum):
     SUBAGENT_FINISHED = "subagent_finished"
+    SANDBOX_ASYNC_JOB_FINISHED = "sandbox_async_job_finished"
 
 
 class AgentNotificationStatus(StrEnum):

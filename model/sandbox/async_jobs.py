@@ -34,3 +34,4 @@ class SandboxAsyncJob(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.now)
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    result_delivered_at: datetime | None = Field(default=None, index=True)

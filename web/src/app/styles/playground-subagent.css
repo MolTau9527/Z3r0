@@ -1,0 +1,157 @@
+.subagent-side-panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(18px);
+  pointer-events: none;
+  transition:
+    opacity var(--motion-normal) var(--ease-standard),
+    transform var(--motion-slow) var(--ease-emphasized);
+  will-change: opacity, transform;
+}
+
+.subagent-side-panel-open {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.subagent-side-panel-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.86);
+  border-left: 1px solid #e4ebf3;
+  box-shadow: -18px 0 36px rgba(31, 45, 61, 0.08);
+}
+
+.subagent-side-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.subagent-side-heading {
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  max-width: 38%;
+  color: #162033;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.subagent-side-heading span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagent-side-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.subagent-side-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.subagent-tab {
+  display: inline-grid;
+  grid-template-columns: minmax(48px, max-content) max-content;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  max-width: 150px;
+  min-height: 28px;
+  padding: 3px 8px;
+  background: #f7f9fc;
+  border: 1px solid #e2e9f2;
+  border-radius: 8px;
+  color: #66758b;
+  cursor: pointer;
+  font-size: 12px;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+
+.subagent-tab:hover {
+  background: #ffffff;
+  color: #2b3650;
+  transform: translateY(-1px);
+}
+
+.subagent-tab-active {
+  background: #ffffff;
+  border-color: rgba(33, 150, 153, 0.42);
+  color: #162033;
+  box-shadow: 0 6px 16px rgba(31, 45, 61, 0.08);
+}
+
+.subagent-tab-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagent-side-body {
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  padding: 16px 16px 170px;
+}
+
+.subagent-side-body-shell .message-scroll-viewport {
+  scroll-padding-bottom: 170px;
+}
+
+.subagent-scroll-tail-floating {
+  right: 16px;
+  bottom: 142px;
+}
+
+.subagent-task-view,
+.subagent-transcript-view {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  padding-bottom: 18px;
+  animation: contentFadeUp 220ms var(--ease-emphasized) both;
+}
+
+.subagent-task-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: #66758b;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.subagent-task-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

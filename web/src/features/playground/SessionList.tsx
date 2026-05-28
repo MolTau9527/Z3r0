@@ -26,7 +26,7 @@ type SessionListProps = {
   onDelete: (sessionId: string) => void;
   onRefreshSessions: () => Promise<void>;
   onDropRuntime: (sessionId: string) => void;
-  onEnsureRuntime: (sessionId: string) => void;
+  onSyncSessions: (items: AgentSessionSummary[]) => void;
 };
 
 type ProjectSessionState = {
@@ -86,7 +86,7 @@ export function SessionList({
   onDelete,
   onRefreshSessions,
   onDropRuntime,
-  onEnsureRuntime,
+  onSyncSessions,
 }: SessionListProps) {
   const [projects, setProjects] = useState<WorkProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
@@ -125,9 +125,7 @@ export function SessionList({
         loading: false,
         items,
       }));
-      items.forEach((session) => {
-        if (session.is_running) onEnsureRuntime(session.session_id);
-      });
+      onSyncSessions(items);
     } catch (error) {
       if (!silent) showApiError(error);
       if (!silent) {
@@ -137,19 +135,29 @@ export function SessionList({
         }));
       }
     }
-  }, [onEnsureRuntime]);
+  }, [onSyncSessions]);
 
   useEffect(() => {
     void loadProjects();
   }, [loadProjects, projectListVersion]);
 
   useEffect(() => {
+    for (const project of projects) {
+      if (!projectSessions.has(project.id)) {
+        void loadProjectSessions(project.id, true);
+      }
+    }
+  }, [loadProjectSessions, projectSessions, projects]);
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
       void loadProjects(true);
-      if (expandedProjectId) void loadProjectSessions(expandedProjectId, true);
+      for (const project of projects) {
+        void loadProjectSessions(project.id, true);
+      }
     }, PROJECT_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [expandedProjectId, loadProjectSessions, loadProjects]);
+  }, [loadProjectSessions, loadProjects, projects]);
 
   const toggleProject = (projectId: number) => {
     const nextProjectId = expandedProjectId === projectId ? null : projectId;

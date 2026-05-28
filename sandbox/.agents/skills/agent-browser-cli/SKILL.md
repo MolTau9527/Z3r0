@@ -1,13 +1,13 @@
 ---
 name: agent-browser-cli
-description: Use agent-browser-cli to perceive and control the user's real Chrome browser, interact with pages, capture screenshots/PDFs, inspect cookies/CDP/network/console state, and troubleshoot only when needed.
+description: Use agent-browser-cli to perceive and control the supervised Chromium browser inside the sandbox, interact with pages, capture screenshots/PDFs, inspect cookies/CDP/network/console state, and troubleshoot only when needed.
 ---
 
 # agent-browser-cli
 
 Use `agent-browser-cli` when a task requires browser perception, browser control, page interaction, screenshots, PDFs, cookies, Chrome DevTools Protocol, network logs, console logs, or browser troubleshooting.
 
-`agent-browser-cli` controls the user's real Chrome through a Rust daemon and a Chrome extension bridge. It preserves the user's existing Chrome profile, login state, cookies, windows, tabs, and extension context. It is not Selenium or Playwright.
+`agent-browser-cli` controls the sandbox's supervised Chromium through a Rust daemon and the bundled Chrome extension bridge. The browser is launched by `supervisord` with profile data under `/data` and the extension loaded from `/opt/agent-browser/chrome-extension`. It is not Selenium or Playwright.
 
 ## Core Rules
 
@@ -428,8 +428,8 @@ Typical status:
 
 Handle in this order:
 
-1. Confirm Chrome is open.
-2. Confirm the `assets/tmwd_cdp_bridge` extension is loaded.
+1. Confirm the supervised Chromium process is running.
+2. Confirm the `/opt/agent-browser/chrome-extension` extension is loaded.
 3. Confirm the extension popup port equals the `configured_port` shown by `doctor`.
 4. Ask the user to reload the extension in `chrome://extensions`.
 5. Recheck:

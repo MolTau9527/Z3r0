@@ -4,10 +4,12 @@ import { AdminLayout } from "./AdminLayout";
 
 export function ProtectedAdminShell() {
   return (
-    <AgentSessionProvider>
-      <ContainerShellProvider>
-        <AdminLayout />
-      </ContainerShellProvider>
-    </AgentSessionProvider>
+    <div className="admin-app">
+      <AgentSessionProvider>
+        <ContainerShellProvider>
+          <AdminLayout />
+        </ContainerShellProvider>
+      </AgentSessionProvider>
+    </div>
   );
 }

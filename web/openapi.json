@@ -39,6 +39,11 @@
             "default": "",
             "title": "Name",
             "type": "string"
+          },
+          "use_responses": {
+            "default": false,
+            "title": "Use Responses",
+            "type": "boolean"
           }
         },
         "title": "AgentConfig",
@@ -505,6 +510,77 @@
         ],
         "title": "AgentSubordinateStatus",
         "type": "string"
+      },
+      "AgentSubordinateTaskToolItem": {
+        "properties": {
+          "agent_code": {
+            "title": "Agent Code",
+            "type": "string"
+          },
+          "agent_name": {
+            "default": "",
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "error": {
+            "default": "",
+            "title": "Error",
+            "type": "string"
+          },
+          "progress": {
+            "default": "",
+            "title": "Progress",
+            "type": "string"
+          },
+          "result": {
+            "default": "",
+            "title": "Result",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentSubordinateStatus"
+          }
+        },
+        "required": [
+          "run_id",
+          "agent_code",
+          "status"
+        ],
+        "title": "AgentSubordinateTaskToolItem",
+        "type": "object"
+      },
+      "AgentSubordinateTaskToolResult": {
+        "properties": {
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentSubordinateTaskToolItem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSubordinateTaskToolItem"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "title": "AgentSubordinateTaskToolResult",
+        "type": "object"
       },
       "AgentTextInputPart": {
         "properties": {
@@ -1820,6 +1896,11 @@
       },
       "ListAgentEventsResponse": {
         "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
           "items": {
             "items": {
               "discriminator": {
@@ -1872,6 +1953,17 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "next_before_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before Id"
           },
           "session_id": {
             "title": "Session Id",
@@ -2106,6 +2198,189 @@
           "running"
         ],
         "title": "RunStateEvent",
+        "type": "object"
+      },
+      "SandboxAsyncJobListToolResult": {
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/SandboxAsyncJobToolResult"
+            },
+            "title": "Jobs",
+            "type": "array"
+          }
+        },
+        "title": "SandboxAsyncJobListToolResult",
+        "type": "object"
+      },
+      "SandboxAsyncJobStatus": {
+        "enum": [
+          "running",
+          "completed",
+          "failed",
+          "canceled"
+        ],
+        "title": "SandboxAsyncJobStatus",
+        "type": "string"
+      },
+      "SandboxAsyncJobToolResult": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Exit Code"
+          },
+          "output_bytes": {
+            "minimum": 0,
+            "title": "Output Bytes",
+            "type": "integer"
+          },
+          "output_file": {
+            "default": "",
+            "title": "Output File",
+            "type": "string"
+          },
+          "output_lines": {
+            "minimum": 0,
+            "title": "Output Lines",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SandboxAsyncJobStatus"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "output_bytes",
+          "output_lines"
+        ],
+        "title": "SandboxAsyncJobToolResult",
+        "type": "object"
+      },
+      "SandboxCommandOutputChunk": {
+        "properties": {
+          "content": {
+            "default": "",
+            "title": "Content",
+            "type": "string"
+          },
+          "end_line": {
+            "minimum": 1,
+            "title": "End Line",
+            "type": "integer"
+          },
+          "output_file": {
+            "title": "Output File",
+            "type": "string"
+          },
+          "start_line": {
+            "minimum": 1,
+            "title": "Start Line",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "output_file",
+          "start_line",
+          "end_line"
+        ],
+        "title": "SandboxCommandOutputChunk",
+        "type": "object"
+      },
+      "SandboxCommandResultMetadata": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Exit Code"
+          },
+          "output_bytes": {
+            "minimum": 0,
+            "title": "Output Bytes",
+            "type": "integer"
+          },
+          "output_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Output File"
+          },
+          "output_lines": {
+            "minimum": 0,
+            "title": "Output Lines",
+            "type": "integer"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Run Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SandboxAsyncJobStatus"
+          }
+        },
+        "required": [
+          "status",
+          "output_bytes",
+          "output_lines"
+        ],
+        "title": "SandboxCommandResultMetadata",
         "type": "object"
       },
       "SandboxContainerDefaultPortMappingsResponse": {
@@ -2745,6 +3020,45 @@
         "title": "ToolResultEvent",
         "type": "object"
       },
+      "ToolResultSchema": {
+        "properties": {
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ToolResultStatusSchema"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ToolResultTypeSchema"
+          }
+        },
+        "required": [
+          "status",
+          "type"
+        ],
+        "title": "ToolResultSchema",
+        "type": "object"
+      },
+      "ToolResultStatusSchema": {
+        "enum": [
+          "success",
+          "error"
+        ],
+        "title": "ToolResultStatusSchema",
+        "type": "string"
+      },
+      "ToolResultTypeSchema": {
+        "enum": [
+          "skill_detail",
+          "knowledge_detail",
+          "knowledge_mutation",
+          "work_project"
+        ],
+        "title": "ToolResultTypeSchema",
+        "type": "string"
+      },
       "TurnBoundaryEvent": {
         "properties": {
           "agent_name": {
@@ -2808,6 +3122,10 @@
             "maxLength": 128,
             "title": "Name",
             "type": "string"
+          },
+          "use_responses": {
+            "title": "Use Responses",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2816,6 +3134,7 @@
           "base_url",
           "api_key",
           "model",
+          "use_responses",
           "context_window"
         ],
         "title": "UpdateAgentConfigRequest",
@@ -3567,6 +3886,35 @@
             "schema": {
               "title": "Session Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 80,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],

@@ -2,21 +2,21 @@
 
 import asyncio
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
 from agents import Runner
-from agents.stream_events import AgentUpdatedStreamEvent
 
 from config import get_config
 from core.agent.registry import AgentRegistry, AgentToolSnapshot, SessionAgentGraph
+from core.runtime import put_nowait_drop_oldest
 from core.runtime.context import AgentRuntimeContext, main_agent_instance_id
-from core.runtime.events import SdkStreamEventNormalizer
 from core.runtime.input_items import build_user_message_item, display_text_from_content, text_input_content
 from core.runtime.live_projection import LiveEventProjection
 from core.runtime.partial_context import DeltaBuffer, flush_partial_context, track_delta
+from core.runtime.streaming import StreamIdleTimeout, iter_normalized_stream_events
 from core.conversation.store import Z3r0Session
 from core.delegation.subagents import cancel_sandbox_subagent_runs, cancel_session_subagent_runs
 from core.sandbox.command_jobs import cancel_sandbox_async_commands, cancel_session_async_sandbox_commands
@@ -60,11 +60,14 @@ class AgentSession:
     def has_subscribers(self) -> bool:
         return bool(self._subscribers)
 
-    async def subscribe(self) -> asyncio.Queue[AgentEventSchema]:
+    async def subscribe(
+        self,
+        include: Callable[[AgentEventSchema], bool] | None = None,
+    ) -> asyncio.Queue[AgentEventSchema]:
         queue: asyncio.Queue[AgentEventSchema] = asyncio.Queue(maxsize=_SUBSCRIBER_QUEUE_SIZE)
         if self.is_running():
-            for event in self._live_projection.snapshot():
-                _put_nowait_drop_oldest(queue, event)
+            for event in self._live_projection.snapshot(include):
+                put_nowait_drop_oldest(queue, event)
         self._subscribers.add(queue)
         return queue
 
@@ -197,10 +200,10 @@ class AgentSession:
 
     async def shutdown(self) -> None:
         await self.cancel_all()
-        self.close()
+        await self.close()
 
-    def close(self) -> None:
-        self._dispose_agent_graph()
+    async def close(self) -> None:
+        await self._dispose_agent_graph()
 
     def uses_sandbox_container(self, container_id: int) -> bool:
         return self._tool_snapshot is not None and self._tool_snapshot.sandbox_container_id == container_id
@@ -208,7 +211,7 @@ class AgentSession:
     async def invalidate_tool_binding(self) -> None:
         await self.cancel_all()
         self._tool_snapshot = None
-        self._dispose_agent_graph()
+        await self._dispose_agent_graph()
 
     async def _run_turn(
         self,
@@ -218,7 +221,7 @@ class AgentSession:
         *,
         emit_user_message: bool = True,
     ) -> AsyncIterator[AgentEventSchema]:
-        graph = self._ensure_agent_graph(agent_code, context)
+        graph = await self._ensure_agent_graph(agent_code, context)
         context.agent_code = agent_code
         if not context.agent_instance_id:
             context.agent_instance_id = main_agent_instance_id(context.session_id, context.user.id, agent_code)
@@ -243,12 +246,11 @@ class AgentSession:
         # SDK stream events converge into one queue for this turn
         queue: asyncio.Queue[AgentEventSchema | None] = asyncio.Queue()
 
-        result_holder: dict[str, Any] = {"result": None}
+        result_holder: dict[str, Any] = {"result": None, "flush_partial": False}
         buffers: dict[str, DeltaBuffer] = {}
 
         async def _consume_main() -> None:
             try:
-                normalizer = SdkStreamEventNormalizer()
                 max_turns = get_config().agent_runtime.main_max_turns
                 user_input = [build_user_message_item(content)]
                 agent_config = get_config().agents.get(agent_code)
@@ -265,28 +267,23 @@ class AgentSession:
                     max_turns=max_turns,
                 )
                 result_holder["result"] = stream
-                async def _consume_stream_events() -> None:
-                    sdk_events = stream.stream_events().__aiter__()
-                    timeout = get_config().agent_runtime.model_stream_idle_timeout_seconds
-                    while True:
-                        try:
-                            sdk_event = await asyncio.wait_for(sdk_events.__anext__(), timeout=timeout)
-                        except StopAsyncIteration:
-                            break
-                        if isinstance(sdk_event, AgentUpdatedStreamEvent):
-                            continue
-                        event = normalizer.event_from_sdk_stream(sdk_event, agent.name)
-                        if event is not None:
-                            queue.put_nowait(event)
-
-                await _consume_stream_events()
+                async for event in iter_normalized_stream_events(stream, current_agent_name=agent.name):
+                    queue.put_nowait(event)
             except asyncio.CancelledError:
                 raise
-            except TimeoutError:
-                message = "model stream was idle for too long before returning output"
-                logger.warning("agent stream idle timeout session=%s agent=%s", self.session_id, agent_code)
+            except StreamIdleTimeout as exc:
+                result_holder["flush_partial"] = True
+                message = str(exc)
+                logger.warning(
+                    "agent stream idle timeout session=%s agent=%s phase=%s timeout=%d",
+                    self.session_id,
+                    agent_code,
+                    exc.phase,
+                    exc.timeout_seconds,
+                )
                 queue.put_nowait(ErrorEvent(created_at=datetime.now(), agent_name=agent.name, message=message))
             except Exception as exc:
+                result_holder["flush_partial"] = True
                 logger.exception("agent stream failed: %s", exc)
                 queue.put_nowait(ErrorEvent(created_at=datetime.now(), agent_name=agent.name, message=str(exc)))
             finally:
@@ -304,6 +301,7 @@ class AgentSession:
                     break
                 track_delta(buffers, event)
                 yield event
+            buffers.clear()
             if not main_task.done():
                 try:
                     await main_task
@@ -322,7 +320,7 @@ class AgentSession:
                     await main_task
                 except (asyncio.CancelledError, Exception):
                     pass
-            if flush_partial:
+            if flush_partial or result_holder["flush_partial"]:
                 await flush_partial_context(
                     result_holder["result"],
                     memory_session,
@@ -330,14 +328,14 @@ class AgentSession:
                     log_label="agent",
                 )
 
-    def _ensure_agent_graph(self, agent_code: str, context: AgentRuntimeContext) -> SessionAgentGraph:
+    async def _ensure_agent_graph(self, agent_code: str, context: AgentRuntimeContext) -> SessionAgentGraph:
         tool_snapshot = AgentToolSnapshot.from_context(context)
         if (
             self._agent_graph is None
             or self._main_agent_code != agent_code
             or self._tool_snapshot != tool_snapshot
         ):
-            self._dispose_agent_graph()
+            await self._dispose_agent_graph()
             self._main_agent_code = agent_code
             self._tool_snapshot = tool_snapshot
             self._agent_graph = self._registry.bind(tool_snapshot)
@@ -351,10 +349,10 @@ class AgentSession:
             )
         return self._agent_graph
 
-    def _dispose_agent_graph(self) -> None:
+    async def _dispose_agent_graph(self) -> None:
         if self._agent_graph is None:
             return
-        self._agent_graph.close()
+        await self._agent_graph.close()
         self._agent_graph = None
         self._main_agent_code = ""
 
@@ -438,7 +436,7 @@ class AgentSession:
         event = RunStateEvent(created_at=datetime.now(), running=True)
         self._live_projection.reset(event)
         for queue in tuple(self._subscribers):
-            _put_nowait_drop_oldest(queue, event)
+            put_nowait_drop_oldest(queue, event)
 
     async def _publish_run_state(self, running: bool) -> None:
         event = RunStateEvent(created_at=datetime.now(), running=running)
@@ -447,7 +445,7 @@ class AgentSession:
         else:
             self._live_projection.apply(event)
         for queue in tuple(self._subscribers):
-            _put_nowait_drop_oldest(queue, event)
+            put_nowait_drop_oldest(queue, event)
         if not running:
             self._live_projection.reset(event)
 
@@ -459,7 +457,7 @@ class AgentSession:
     async def _publish(self, event: AgentEventSchema) -> None:
         self._live_projection.apply(event)
         for queue in tuple(self._subscribers):
-            _put_nowait_drop_oldest(queue, event)
+            put_nowait_drop_oldest(queue, event)
 
 
 @dataclass
@@ -511,7 +509,10 @@ class AgentSessionPool:
 
     async def get_or_create(self, session_id: str) -> AgentSession:
         async with self._lock:
-            return self._get_or_create_locked(session_id)
+            session = self._get_or_create_locked(session_id)
+            evicted = self._enforce_capacity_locked()
+        await self._close_evicted(evicted, reason="LRU")
+        return session
 
     def _get_or_create_locked(self, session_id: str) -> AgentSession:
         entry = self._pool.get(session_id)
@@ -519,7 +520,6 @@ class AgentSessionPool:
             entry = _PooledSession(session=AgentSession(session_id, self._registry))
             self._pool[session_id] = entry
             logger.debug("agent pool created session=%s", session_id)
-            self._enforce_capacity_locked()
         else:
             entry.last_used_at = time.monotonic()
         return entry.session
@@ -540,13 +540,23 @@ class AgentSessionPool:
             return False
         return await entry.session.interrupt()
 
-    async def subscribe(self, session_id: str) -> tuple[AgentSession, asyncio.Queue[AgentEventSchema]]:
+    async def subscribe(
+        self,
+        session_id: str,
+        include: Callable[[AgentEventSchema], bool] | None = None,
+    ) -> tuple[AgentSession, asyncio.Queue[AgentEventSchema]]:
         session = await self.get_or_create(session_id)
-        return session, await session.subscribe()
+        return session, await session.subscribe(include)
 
-    async def drain_notifications(self, session_id: str, context: AgentRuntimeContext) -> bool:
+    async def drain_notifications(
+        self,
+        session_id: str,
+        context: AgentRuntimeContext,
+        *,
+        target_agent_instance_id: str | None = None,
+    ) -> bool:
         session = await self.get_or_create(session_id)
-        return await session.start_notification_drain(context)
+        return await session.start_notification_drain(context, target_agent_instance_id=target_agent_instance_id)
 
     async def cancel_all(self, session_id: str) -> bool:
         async with self._lock:
@@ -584,15 +594,16 @@ class AgentSessionPool:
             try:
                 await asyncio.sleep(self._sweep_interval)
                 async with self._lock:
-                    self._sweep_expired_locked(time.monotonic())
+                    expired = self._sweep_expired_locked(time.monotonic())
+                await self._close_evicted(expired, reason="idle")
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("agent pool sweep iteration failed")
 
-    def _sweep_expired_locked(self, now: float) -> None:
+    def _sweep_expired_locked(self, now: float) -> list[tuple[str, _PooledSession]]:
         if self._ttl <= 0:
-            return
+            return []
         expired = [
             sid for sid, entry in self._pool.items()
             if (
@@ -601,16 +612,17 @@ class AgentSessionPool:
                 and now - entry.last_used_at > self._ttl
             )
         ]
+        evicted: list[tuple[str, _PooledSession]] = []
         for sid in expired:
             entry = self._pool.pop(sid)
-            entry.session.close()
-            logger.debug("agent pool evicted idle session=%s", sid)
+            evicted.append((sid, entry))
+        return evicted
 
-    def _enforce_capacity_locked(self) -> None:
+    def _enforce_capacity_locked(self) -> list[tuple[str, _PooledSession]]:
         # only idle entries are evicted; running sessions may briefly exceed the cap
         overflow = len(self._pool) - self._max_size
         if overflow <= 0:
-            return
+            return []
         idle = sorted(
             (
                 (sid, entry)
@@ -619,10 +631,18 @@ class AgentSessionPool:
             ),
             key=lambda kv: kv[1].last_used_at,
         )
+        evicted: list[tuple[str, _PooledSession]] = []
         for sid, _ in idle[:overflow]:
             entry = self._pool.pop(sid)
-            entry.session.close()
-            logger.debug("agent pool evicted LRU session=%s", sid)
+            evicted.append((sid, entry))
+        return evicted
+
+    async def _close_evicted(self, evicted: list[tuple[str, _PooledSession]], *, reason: str) -> None:
+        if not evicted:
+            return
+        await asyncio.gather(*(entry.session.close() for _, entry in evicted), return_exceptions=True)
+        for sid, _ in evicted:
+            logger.debug("agent pool evicted %s session=%s", reason, sid)
 
 
 _pool: AgentSessionPool | None = None
@@ -643,22 +663,6 @@ def replace_agent_pool(pool: AgentSessionPool | None = None) -> AgentSessionPool
 
 def get_agent_registry() -> AgentRegistry:
     return get_agent_pool().registry
-
-
-def _put_nowait_drop_oldest(queue: asyncio.Queue[AgentEventSchema], event: AgentEventSchema) -> None:
-    try:
-        queue.put_nowait(event)
-        return
-    except asyncio.QueueFull:
-        pass
-    try:
-        queue.get_nowait()
-    except asyncio.QueueEmpty:
-        pass
-    try:
-        queue.put_nowait(event)
-    except asyncio.QueueFull:
-        logger.debug("agent event dropped for slow subscriber")
 
 
 def _context_for_notification(
@@ -716,12 +720,6 @@ async def _force_mark_session_stopped(session_id: str, *, error: str = "") -> No
     from service.agent import sessions as agent_sessions
 
     await agent_sessions.force_mark_session_stopped(session_id, error=error)
-
-
-async def _finish_session_run(session_id: str, *, error: str = "") -> None:
-    from service.agent import sessions as agent_sessions
-
-    await agent_sessions.finish_session_run(session_id, error=error)
 
 
 async def _has_active_session_runtime(session_id: str) -> bool:

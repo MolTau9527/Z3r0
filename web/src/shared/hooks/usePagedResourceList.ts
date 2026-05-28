@@ -15,11 +15,13 @@ type QueryResponse<Item> = {
 };
 
 type UsePagedResourceListOptions<Item> = {
-  pageSize: number;
+  pageSize?: number;
   query: (params: QueryParams) => Promise<QueryResponse<Item>>;
 };
 
-export function usePagedResourceList<Item>({ pageSize, query }: UsePagedResourceListOptions<Item>) {
+const DEFAULT_PAGE_SIZE = 10;
+
+export function usePagedResourceList<Item>({ pageSize = DEFAULT_PAGE_SIZE, query }: UsePagedResourceListOptions<Item>) {
   const [items, setItems] = useState<Item[]>([]);
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState("");

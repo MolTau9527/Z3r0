@@ -1,6 +1,5 @@
 from schema.common.responses import CommonResponse
 from schema.system_config.config import (
-    InstanceConfigSchema,
     UpdateInstanceConfigRequest,
     UpdateInstanceConfigResponse,
 )

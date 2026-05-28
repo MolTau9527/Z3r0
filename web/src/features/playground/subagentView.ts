@@ -1,4 +1,4 @@
-import type { ChatNode, NestedTranscript, SubagentExecutionItem, TranscriptBlock } from "./playgroundReducer";
+import type { ChatNode, NestedTranscript, SubagentExecutionItem, TranscriptBlock } from "./chatState";
 
 export type SubagentTab = {
   agentCode: string;

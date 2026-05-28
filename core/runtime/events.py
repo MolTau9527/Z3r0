@@ -24,6 +24,7 @@ from openai.types.responses.response_text_delta_event import ResponseTextDeltaEv
 from openai.types.responses.response_text_done_event import ResponseTextDoneEvent
 from pydantic import BaseModel
 
+from core import TEXT_CONTENT_TYPES, is_internal_user_text
 from core.runtime.input_items import display_text_from_content
 from schema.agent.events import (
     AgentImageDetailSchema,
@@ -49,7 +50,6 @@ from schema.agent.subordinates import AgentSubordinateStatus
 # `incomplete` is a partial output, not an error
 _TOOL_ERROR_STATUSES = {"failed", "error"}
 
-_TEXT_CONTENT_TYPES = {"input_text", "output_text", "text"}
 _RUN_ITEM_RESPONSE_BOUNDARIES = {
     "message_output_created",
     "reasoning_item_created",
@@ -301,15 +301,15 @@ def _events_from_stored_message(
     text = "".join(parts)
     role = message.get("role")
     if role == "user":
-        content = _stored_user_input_parts(message.get("content"))
-        if not content:
+        content_parts = _stored_user_input_parts(message.get("content"))
+        if not content_parts:
             return []
         if _is_hidden_user_message(text, scope):
             return [TurnBoundaryEvent(created_at=created_at, **scope)]
         return [UserMessageEvent(
             created_at=created_at,
-            content=content,
-            display_text=display_text_from_content(content),
+            content=content_parts,
+            display_text=display_text_from_content(content_parts),
             target_agent_code=owner_code,
         )]
     if not text:
@@ -328,7 +328,7 @@ def _events_from_stored_message(
 
 
 def _is_hidden_user_message(text: str, scope: dict[str, str]) -> bool:
-    return text.lstrip().startswith("# Internal ") or bool(scope.get("nested_for"))
+    return is_internal_user_text(text) or bool(scope.get("nested_for"))
 
 
 def _events_from_stored_reasoning(
@@ -358,7 +358,7 @@ def _stored_message_text_parts(content: Any) -> list[str]:
         if not isinstance(item, dict):
             continue
         text = item.get("text")
-        if isinstance(text, str) and item.get("type") in _TEXT_CONTENT_TYPES:
+        if isinstance(text, str) and item.get("type") in TEXT_CONTENT_TYPES:
             parts.append(text)
     return [part for part in parts if part]
 
@@ -374,7 +374,7 @@ def _stored_user_input_parts(content: Any) -> list[AgentInputPart]:
         if not isinstance(item, dict):
             continue
         item_type = item.get("type")
-        if item_type in _TEXT_CONTENT_TYPES:
+        if item_type in TEXT_CONTENT_TYPES:
             text = item.get("text")
             if isinstance(text, str) and text.strip():
                 parts.append(AgentTextInputPart(text=text.strip()))

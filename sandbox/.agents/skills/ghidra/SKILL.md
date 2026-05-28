@@ -138,11 +138,11 @@ mkdir -p ./analysis
 # Run comprehensive analysis
 /root/.agents/skills/ghidra/scripts/ghidra-analyze.sh -s ExportAll.java -o ./analysis unknown_binary
 
-# Review the summary first
-cat ./analysis/unknown_binary_summary.txt
+# Review the summary first with bounded reads
+sed -n '1,160p' ./analysis/unknown_binary_summary.txt
 
 # Look at interesting patterns (crypto, network, dangerous functions)
-cat ./analysis/unknown_binary_interesting.txt
+sed -n '1,160p' ./analysis/unknown_binary_interesting.txt
 
 # Check specific decompiled functions
 grep -A 50 "encrypt" ./analysis/unknown_binary_decompiled.c
@@ -166,7 +166,7 @@ grep -A 50 "encrypt" ./analysis/unknown_binary_decompiled.c
 /root/.agents/skills/ghidra/scripts/ghidra-analyze.sh --no-analysis -s ExportFunctions.java -o . program
 
 # Parse with jq
-cat program_functions.json | jq '.functions[] | "\(.address): \(.name)"'
+jq '.functions[] | "\(.address): \(.name)"' program_functions.json
 ```
 
 ### Find Specific Patterns

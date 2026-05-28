@@ -1,6 +1,6 @@
 import { Button, Popconfirm, Tag } from "@douyinfe/semi-ui";
 import { Pencil, Trash2, Users } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createSystemUser, deleteSystemUser, querySystemUsers, updateSystemUser } from "../../shared/api/systemUsers";
 import type { CreateSystemUserRequest, SystemUser, UpdateSystemUserRequest } from "../../shared/api/types";
 import { ResourcePageShell } from "../../shared/components/ResourcePageShell";
@@ -13,29 +13,25 @@ import { formatDateTime } from "../../shared/lib/date";
 import { SYSTEM_USER_ROLE_LABEL } from "../../shared/lib/labels";
 import { UserFormModal } from "./UserFormModal";
 
-const DEFAULT_PAGE_SIZE = 10;
-
 type ModalState = { mode: "create" } | { mode: "edit"; user: SystemUser } | null;
 
 export function SystemUsersPage() {
   const {
     items: users, page, keyword, loading, loadItems: loadUsers, total, rangeStart, rangeEnd,
     setKeyword, search, previous, next, canGoBack, canGoNext,
-  } = usePagedResourceList<SystemUser>({ pageSize: DEFAULT_PAGE_SIZE, query: querySystemUsers });
+  } = usePagedResourceList<SystemUser>({ query: querySystemUsers });
   const [modal, setModal] = useState<ModalState>(null);
   const { run: deleteUser, busyId: deletingUserId } = useResourceAction<SystemUser>(
     (user) => deleteSystemUser(user.id),
     loadUsers,
   );
 
-  const openCreateModal = useCallback(() => setModal({ mode: "create" }), []);
-  const refreshUsers = useCallback(() => void loadUsers(), [loadUsers]);
   useAdminResourceHeader({
     createLabel: "Create User",
     refreshLabel: "Refresh users",
     loading,
-    onCreate: openCreateModal,
-    onRefresh: refreshUsers,
+    onCreate: () => setModal({ mode: "create" }),
+    onRefresh: loadUsers,
   });
 
   const { saving, submit } = useResourceSubmit({

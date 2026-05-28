@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChatState } from "./playgroundReducer";
+import type { ChatState } from "./chatState";
 import {
   collectSubagentTabs,
   type SubagentTab,

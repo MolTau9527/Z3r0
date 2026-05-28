@@ -16,13 +16,11 @@ import { SANDBOX_CONTAINER_STATUS_COLOR, SANDBOX_CONTAINER_STATUS_LABEL } from "
 import { useContainerShell } from "../container-shell/ContainerShellProvider";
 import { SandboxContainerFormModal } from "./SandboxContainerFormModal";
 
-const DEFAULT_PAGE_SIZE = 10;
-
 export function SandboxContainersPage() {
   const {
     items: containers, page, keyword, loading, loadItems: loadContainers, total, rangeStart, rangeEnd,
     setKeyword, search, previous, next, canGoBack, canGoNext,
-  } = usePagedResourceList<SandboxContainer>({ pageSize: DEFAULT_PAGE_SIZE, query: querySandboxContainers });
+  } = usePagedResourceList<SandboxContainer>({ query: querySandboxContainers });
   const [modalOpen, setModalOpen] = useState(false);
   const [images, setImages] = useState<SandboxImage[]>([]);
   const [imagesLoading, setImagesLoading] = useState(false);
@@ -59,14 +57,12 @@ export function SandboxContainersPage() {
     void loadReadyImages();
   }, [loadReadyImages]);
 
-  const openCreateModal = useCallback(() => setModalOpen(true), []);
-  const refreshContainers = useCallback(() => void refreshAll(), [refreshAll]);
   useAdminResourceHeader({
     createLabel: "Create Container",
     refreshLabel: "Refresh sandbox containers",
     loading: loading || imagesLoading,
-    onCreate: openCreateModal,
-    onRefresh: refreshContainers,
+    onCreate: () => setModalOpen(true),
+    onRefresh: refreshAll,
   });
 
   const { saving, submit } = useResourceSubmit({

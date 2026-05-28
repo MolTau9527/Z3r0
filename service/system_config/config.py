@@ -38,6 +38,7 @@ async def update_instance_config(request: UpdateInstanceConfigRequest) -> Instan
                 "base_url": patch.base_url,
                 "api_key": patch.api_key,
                 "model": patch.model,
+                "use_responses": patch.use_responses,
                 "context_window": patch.context_window,
             })
 

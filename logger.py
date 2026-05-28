@@ -19,9 +19,9 @@ _LIBRARY_LOGGERS = (
     "openai",
     "openai.agents",
     "fastapi",
+    "httpcore",
+    "httpx",
     "asyncpg",
-    "litellm",
-    "LiteLLM",
     "websockets",
     "sqlalchemy",
 )
@@ -72,11 +72,6 @@ def configure_library_loggers(level: str | int | None = None) -> None:
         library_logger = logging.getLogger(logger_name)
         _clear_handlers(library_logger)
         library_logger.propagate = True
-        if logger_name in {"litellm", "LiteLLM"}:
-            library_logger.setLevel(logging.ERROR + 1)
-            library_logger.disabled = True
-            continue
-
         library_logger.disabled = False
         library_logger.setLevel(quiet_level)
 

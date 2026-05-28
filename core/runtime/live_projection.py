@@ -1,4 +1,4 @@
-"""In-memory projection of an active stream for reconnect replay."""
+"""In-memory projection of active stream state for reconnect replay."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -15,8 +15,6 @@ from schema.agent.events import (
     ThinkingDeltaEvent,
     ToolCallEvent,
     ToolResultEvent,
-    TurnBoundaryEvent,
-    UserMessageEvent,
 )
 
 
@@ -29,17 +27,22 @@ class _SegmentKey:
 
 
 class LiveEventProjection:
+    """Reconnect replay for active stream state not yet covered by history."""
+
     def __init__(self) -> None:
         self._events: list[AgentEventSchema] = []
         self._segment_indexes: dict[_SegmentKey, int] = {}
-        self._tool_indexes: dict[tuple[str, str, str, str], int] = {}
+        self._tool_indexes: dict[tuple[str, str, str], int] = {}
+        self._tool_result_indexes: dict[tuple[str, str, str], int] = {}
         self._subagent_indexes: dict[str, int] = {}
 
     def reset(self, event: RunStateEvent) -> None:
         self._events = [event]
-        self._segment_indexes.clear()
-        self._tool_indexes.clear()
-        self._subagent_indexes.clear()
+        self._clear_indexes()
+
+    def clear(self) -> None:
+        self._events = []
+        self._clear_indexes()
 
     def snapshot(self, include: Callable[[AgentEventSchema], bool] | None = None) -> list[AgentEventSchema]:
         if include is None:
@@ -47,27 +50,40 @@ class LiveEventProjection:
         return [event for event in self._events if include(event)]
 
     def apply(self, event: AgentEventSchema) -> None:
-        if isinstance(event, (TextDeltaEvent, TextCompleteEvent, ThinkingDeltaEvent, ThinkingCompleteEvent)):
+        if isinstance(event, RunStateEvent):
+            self._events = [event] + [item for item in self._events if not isinstance(item, RunStateEvent)]
+            self._rebuild_indexes()
+            return
+        if isinstance(event, (TextDeltaEvent, ThinkingDeltaEvent)):
             self._apply_segment(event)
             return
-        if isinstance(event, (ToolCallEvent, ToolResultEvent)):
-            self._apply_tool(event)
+        if isinstance(event, (TextCompleteEvent, ThinkingCompleteEvent)):
+            self._apply_segment_complete(event)
+            return
+        if isinstance(event, ToolCallEvent):
+            self._apply_tool_call(event)
+            return
+        if isinstance(event, ToolResultEvent):
+            self._apply_tool_result(event)
             return
         if isinstance(event, SubagentTaskEvent):
             self._apply_subagent(event)
             return
         if isinstance(event, DoneEvent):
-            self._events.append(event)
+            self.clear()
             return
-        if isinstance(event, (UserMessageEvent, TurnBoundaryEvent, ErrorEvent, RunStateEvent)):
+        if isinstance(event, ErrorEvent):
             self._events.append(event)
 
-    def _apply_segment(
-        self,
-        event: TextDeltaEvent | TextCompleteEvent | ThinkingDeltaEvent | ThinkingCompleteEvent,
-    ) -> None:
+    def _clear_indexes(self) -> None:
+        self._segment_indexes.clear()
+        self._tool_indexes.clear()
+        self._tool_result_indexes.clear()
+        self._subagent_indexes.clear()
+
+    def _apply_segment(self, event: TextDeltaEvent | ThinkingDeltaEvent) -> None:
         key = _SegmentKey(
-            event_type="thinking" if event.type in {"thinking_delta", "thinking_complete"} else "text",
+            event_type="thinking" if event.type == "thinking_delta" else "text",
             segment_id=event.segment_id,
             nested_for=event.nested_for,
             nested_call_id=event.nested_call_id,
@@ -75,20 +91,49 @@ class LiveEventProjection:
         index = self._segment_indexes.get(key)
         if index is None:
             self._segment_indexes[key] = len(self._events)
-            self._events.append(_projected_segment_event(event, _segment_text(event)))
+            self._events.append(event)
             return
-
         current = self._events[index]
-        text = getattr(event, "text", None)
-        if text is None:
-            text = f"{_segment_text(current)}{event.delta}"
-        self._events[index] = _projected_segment_event(event, text)
+        text = _event_text(current)
+        self._events[index] = event.model_copy(update={"delta": f"{text}{event.delta}"})
 
-    def _apply_tool(self, event: ToolCallEvent | ToolResultEvent) -> None:
-        key = (event.type, event.call_id, event.nested_for, event.nested_call_id)
+    def _forget_segment(self, event: AgentEventSchema) -> None:
+        key = _SegmentKey(
+            event_type="thinking" if event.type == "thinking_complete" else "text",
+            segment_id=getattr(event, "segment_id", ""),
+            nested_for=getattr(event, "nested_for", ""),
+            nested_call_id=getattr(event, "nested_call_id", ""),
+        )
+        self._pop_index(self._segment_indexes.pop(key, None))
+
+    def _apply_segment_complete(self, event: TextCompleteEvent | ThinkingCompleteEvent) -> None:
+        key = _SegmentKey(
+            event_type="thinking" if event.type == "thinking_complete" else "text",
+            segment_id=event.segment_id,
+            nested_for=event.nested_for,
+            nested_call_id=event.nested_call_id,
+        )
+        index = self._segment_indexes.pop(key, None)
+        if index is None:
+            self._events.append(event)
+            return
+        self._events[index] = event
+        self._rebuild_indexes()
+
+    def _apply_tool_call(self, event: ToolCallEvent) -> None:
+        key = (event.call_id, event.nested_for, event.nested_call_id)
         index = self._tool_indexes.get(key)
         if index is None:
             self._tool_indexes[key] = len(self._events)
+            self._events.append(event)
+            return
+        self._events[index] = event
+
+    def _apply_tool_result(self, event: ToolResultEvent) -> None:
+        key = (event.call_id, event.nested_for, event.nested_call_id)
+        index = self._tool_result_indexes.get(key)
+        if index is None:
+            self._tool_result_indexes[key] = len(self._events)
             self._events.append(event)
             return
         self._events[index] = event
@@ -101,38 +146,31 @@ class LiveEventProjection:
             return
         self._events[index] = event
 
+    def _pop_index(self, index: int | None) -> None:
+        if index is None:
+            return
+        self._events.pop(index)
+        self._rebuild_indexes()
 
-def _segment_complete_event(
-    event: TextDeltaEvent | TextCompleteEvent | ThinkingDeltaEvent | ThinkingCompleteEvent,
-    text: str,
-) -> TextCompleteEvent | ThinkingCompleteEvent:
-    if event.type in {"thinking_delta", "thinking_complete"}:
-        return ThinkingCompleteEvent(
-            created_at=event.created_at,
-            agent_name=event.agent_name,
-            nested_for=event.nested_for,
-            nested_call_id=event.nested_call_id,
-            segment_id=event.segment_id,
-            text=text,
-        )
-    return TextCompleteEvent(
-        created_at=event.created_at,
-        agent_name=event.agent_name,
-        nested_for=event.nested_for,
-        nested_call_id=event.nested_call_id,
-        segment_id=event.segment_id,
-        text=text,
-    )
-
-
-def _projected_segment_event(
-    event: TextDeltaEvent | TextCompleteEvent | ThinkingDeltaEvent | ThinkingCompleteEvent,
-    text: str,
-) -> TextCompleteEvent | ThinkingCompleteEvent:
-    return _segment_complete_event(event, text)
+    def _rebuild_indexes(self) -> None:
+        self._clear_indexes()
+        for index, event in enumerate(self._events):
+            if isinstance(event, (TextDeltaEvent, ThinkingDeltaEvent)):
+                self._segment_indexes[_SegmentKey(
+                    event_type="thinking" if event.type == "thinking_delta" else "text",
+                    segment_id=event.segment_id,
+                    nested_for=event.nested_for,
+                    nested_call_id=event.nested_call_id,
+                )] = index
+            elif isinstance(event, ToolCallEvent):
+                self._tool_indexes[(event.call_id, event.nested_for, event.nested_call_id)] = index
+            elif isinstance(event, ToolResultEvent):
+                self._tool_result_indexes[(event.call_id, event.nested_for, event.nested_call_id)] = index
+            elif isinstance(event, SubagentTaskEvent):
+                self._subagent_indexes[event.run_id] = index
 
 
-def _segment_text(event: AgentEventSchema) -> str:
+def _event_text(event: AgentEventSchema) -> str:
     value = getattr(event, "text", None)
     if isinstance(value, str):
         return value

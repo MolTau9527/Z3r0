@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from core.delegation.subagents import subscribe_session_events, unsubscribe_session_events
 from core.runtime.session import get_agent_pool
+from handler import cancel_ws_task as _cancel_task, close_ws_silently as _close_silently
 from logger import get_logger
 from middleware.auth import AuthUser, decode_access_token
 from schema.agent.events import (
@@ -72,15 +73,28 @@ async def list_agent_sessions_handler(limit: int, user: AuthUser) -> CommonRespo
     return CommonResponse(data=ListAgentSessionsResponse(items=sessions))
 
 
-async def list_agent_events_handler(session_id: str, user: AuthUser) -> CommonResponse:
-    events = await agent_sessions.replay_session_events(
+async def list_agent_events_handler(
+    session_id: str,
+    user: AuthUser,
+    before_id: int | None = None,
+    limit: int = agent_sessions.DEFAULT_REPLAY_EVENT_PAGE_SIZE,
+) -> CommonResponse:
+    result = await agent_sessions.replay_session_events_page(
         session_id=session_id,
         user_id=user.id,
         user_role=user.role,
+        before_id=before_id,
+        limit=limit,
     )
-    if events is None:
+    if result is None:
         return CommonResponse(code=HTTPStatus.NOT_FOUND.value, message="agent session not found")
-    return CommonResponse(data=ListAgentEventsResponse(session_id=session_id, items=events))
+    events, has_more, next_before_id = result
+    return CommonResponse(data=ListAgentEventsResponse(
+        session_id=session_id,
+        items=events,
+        has_more=has_more,
+        next_before_id=next_before_id,
+    ))
 
 
 async def handle_agent_stream(websocket: WebSocket, session_id: str, token: str) -> None:
@@ -99,12 +113,27 @@ async def handle_agent_stream(websocket: WebSocket, session_id: str, token: str)
     subscriber: asyncio.Queue[AgentEventSchema] | None = None
     runtime_forwarder: asyncio.Task | None = None
     subagent_forwarder: asyncio.Task | None = None
+    sent_events: set[str] = set()
 
     try:
         runtime, runtime_events = await get_agent_pool().subscribe(session_id)
         subscriber = await subscribe_session_events(session_id)
-        runtime_forwarder = asyncio.create_task(_forward_events(websocket, runtime_events, send_lock, session_id, user))
-        subagent_forwarder = asyncio.create_task(_forward_events(websocket, subscriber, send_lock, session_id, user))
+        runtime_forwarder = asyncio.create_task(_forward_events(
+            websocket,
+            runtime_events,
+            send_lock,
+            session_id,
+            user,
+            sent_events,
+        ))
+        subagent_forwarder = asyncio.create_task(_forward_events(
+            websocket,
+            subscriber,
+            send_lock,
+            session_id,
+            user,
+            sent_events,
+        ))
 
         while True:
             try:
@@ -251,42 +280,37 @@ async def _send_event(
         return False
 
 
+_ACCESS_CHECK_INTERVAL = 50
+
 async def _forward_events(
     websocket: WebSocket,
     queue: asyncio.Queue[AgentEventSchema],
     send_lock: asyncio.Lock,
     session_id: str,
     user: AuthUser,
+    sent_events: set[str],
 ) -> None:
     try:
+        events_since_check = 0
         while True:
             event = await queue.get()
-            if not await agent_sessions.can_access_session(session_id, user.id, user.role):
-                await _close_silently(websocket, code=ws_status.WS_1008_POLICY_VIOLATION)
-                return
+            events_since_check += 1
+            if events_since_check >= _ACCESS_CHECK_INTERVAL:
+                events_since_check = 0
+                if not await agent_sessions.can_access_session(session_id, user.id, user.role):
+                    await _close_silently(websocket, code=ws_status.WS_1008_POLICY_VIOLATION)
+                    return
+            key = _event_content_key(event)
+            if key:
+                if key in sent_events:
+                    continue
+                sent_events.add(key)
             if not await _send_event(websocket, event, send_lock):
                 return
     except asyncio.CancelledError:
         raise
     except Exception:
         logger.debug("agent event forwarding stopped", exc_info=True)
-
-
-async def _cancel_task(task: asyncio.Task | None) -> None:
-    if task is None or task.done():
-        return
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-
-
-async def _close_silently(websocket: WebSocket, code: int = ws_status.WS_1011_INTERNAL_ERROR) -> None:
-    try:
-        await websocket.close(code=code)
-    except Exception:
-        pass
 
 
 def _decode_ws_token(token: str) -> AuthUser | None:
@@ -304,3 +328,46 @@ def _validation_error_message(exc: ValidationError) -> str:
     loc = ".".join(str(part) for part in first.get("loc", ()) if part != "__root__")
     msg = str(first.get("msg") or "invalid payload")
     return f"{loc}: {msg}" if loc else msg
+
+
+_KEY_SEP = "\x1f"
+
+
+def _event_content_key(event: AgentEventSchema) -> str:
+    """Lightweight content key for deduplicating events within a WS connection.
+
+    Returns "" for control signals (done/run_state) that must never be deduplicated.
+    """
+    t = event.type
+    nf = getattr(event, "nested_for", "")
+    nc = getattr(event, "nested_call_id", "")
+    s = _KEY_SEP
+    if t in ("text_delta", "thinking_delta"):
+        return ""
+    if t in ("text_complete", "thinking_complete"):
+        return f"{t}{s}{nf}{s}{nc}{s}{event.segment_id}{s}{event.text}"
+    if t == "tool_call":
+        return f"tool_call{s}{nf}{s}{nc}{s}{event.call_id}{s}{event.name}{s}{_stable_json(event.arguments)}"
+    if t == "tool_result":
+        return f"tool_result{s}{nf}{s}{nc}{s}{event.call_id}{s}{event.output}{s}{event.is_error}"
+    if t == "subagent_task":
+        return (
+            f"subagent_task{s}{event.run_id}{s}{event.status}{s}{event.progress}"
+            f"{s}{event.result}{s}{event.error}"
+        )
+    if t == "turn_boundary":
+        return f"turn_boundary{s}{nf}{s}{nc}"
+    if t == "user_message":
+        return f"user_message{s}{event.display_text}"
+    if t == "error":
+        return f"error{s}{nf}{s}{nc}{s}{event.message}"
+    return ""
+
+
+def _stable_json(value) -> str:
+    import json
+
+    try:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    except TypeError:
+        return str(value)

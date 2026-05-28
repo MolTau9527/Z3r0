@@ -5,7 +5,7 @@ from uuid import uuid4
 from sqlalchemy import String, cast, func, or_
 from sqlmodel import select
 
-from core.agent.specs import DEFAULT_AGENT_CODE
+from core.agent.constants import DEFAULT_AGENT_CODE
 from database import get_async_session
 from logger import get_logger
 from model.agent.sessions import AgentSessionMeta
@@ -24,10 +24,9 @@ from schema.work_project.projects import (
     WorkProjectStatus,
     WorkProjectTaskSchema,
 )
-from service.agent.sessions import cancel_sessions, delete_session, list_sessions
+from service.agent.sessions import cancel_sessions, delete_session, ensure_sdk_session_row, list_sessions
 from service.common.pagination import Page, paginate_statement
 from service.work_project.progress import derive_work_project_status
-from utils.sdk_tables import agent_sessions
 
 
 logger = get_logger(__name__)
@@ -250,7 +249,7 @@ async def create_work_project_session(
             return WorkProjectSessionCreateResult(inactive=True)
         title = await _next_project_session_title(session, project_id)
 
-        await session.execute(agent_sessions.insert().values({"session_id": session_id}))
+        await ensure_sdk_session_row(session, session_id)
         session.add(AgentSessionMeta(
             session_id=session_id,
             session_type=SessionType.PROJECT,

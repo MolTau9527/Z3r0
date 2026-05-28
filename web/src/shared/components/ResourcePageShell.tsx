@@ -55,14 +55,7 @@ export function ResourcePageShell({
 
   return (
     <section className="resource-page">
-      <div className="metric-strip">
-        {metrics.map((metric) => (
-          <div className="metric-card" key={metric.label}>
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-          </div>
-        ))}
-      </div>
+      <MetricStrip metrics={metrics} />
 
       <div className="table-panel">
         <form className="table-toolbar" onSubmit={handleSearch}>
@@ -93,5 +86,18 @@ export function ResourcePageShell({
         </div>
       </div>
     </section>
+  );
+}
+
+export function MetricStrip({ metrics }: { metrics: ResourceMetric[] }) {
+  return (
+    <div className="metric-strip">
+      {metrics.map((metric) => (
+        <div className="metric-card" key={metric.label}>
+          <span>{metric.label}</span>
+          <strong>{metric.value}</strong>
+        </div>
+      ))}
+    </div>
   );
 }

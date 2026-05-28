@@ -92,7 +92,7 @@ export function Composer({
     if (!imageFiles.length) return;
     const available = Math.max(0, MAX_IMAGES - images.length);
     if (available === 0) {
-      Toast.warning(`最多支持 ${MAX_IMAGES} 张图片`);
+      Toast.warning(`At most ${MAX_IMAGES} images allowed`);
       return;
     }
     const next: AgentImageInputPart[] = [];
@@ -100,18 +100,18 @@ export function Composer({
     let nextBytes = 0;
     for (const file of imageFiles.slice(0, available)) {
       if (file.size > MAX_IMAGE_BYTES) {
-        Toast.warning(`${file.name} 超过 3.75MB，已跳过`);
+        Toast.warning(`${file.name} exceeds 3.75 MB, skipped`);
         continue;
       }
       if (currentBytes + nextBytes + file.size > MAX_TOTAL_IMAGE_BYTES) {
-        Toast.warning("图片总大小超过 6MB，已跳过部分图片");
+        Toast.warning("Total image size exceeds 6 MB, some images skipped");
         continue;
       }
       try {
         next.push(await fileToImagePart(file));
         nextBytes += file.size;
       } catch {
-        Toast.error(`${file.name} 读取失败`);
+        Toast.error(`Failed to read ${file.name}`);
       }
     }
     if (next.length) {

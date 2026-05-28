@@ -649,6 +649,11 @@ export interface components {
              * @default
              */
             name: string;
+            /**
+             * Use Responses
+             * @default false
+             */
+            use_responses: boolean;
         };
         AgentEventSchema: components["schemas"]["UserMessageEvent"] | components["schemas"]["TurnBoundaryEvent"] | components["schemas"]["RunStateEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["TextCompleteEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["ThinkingCompleteEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["SubagentTaskEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
         /**
@@ -870,6 +875,46 @@ export interface components {
          * @enum {string}
          */
         AgentSubordinateStatus: "running" | "completed" | "failed" | "canceled";
+        /** AgentSubordinateTaskToolItem */
+        AgentSubordinateTaskToolItem: {
+            /** Agent Code */
+            agent_code: string;
+            /**
+             * Agent Name
+             * @default
+             */
+            agent_name: string;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+            /**
+             * Progress
+             * @default
+             */
+            progress: string;
+            /**
+             * Result
+             * @default
+             */
+            result: string;
+            /** Run Id */
+            run_id: string;
+            status: components["schemas"]["AgentSubordinateStatus"];
+        };
+        /** AgentSubordinateTaskToolResult */
+        AgentSubordinateTaskToolResult: {
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** @default null */
+            task: components["schemas"]["AgentSubordinateTaskToolItem"] | null;
+            /** Tasks */
+            tasks?: components["schemas"]["AgentSubordinateTaskToolItem"][];
+        };
         /** AgentTextInputPart */
         AgentTextInputPart: {
             /** Text */
@@ -1534,8 +1579,15 @@ export interface components {
         };
         /** ListAgentEventsResponse */
         ListAgentEventsResponse: {
+            /**
+             * Has More
+             * @default false
+             */
+            has_more: boolean;
             /** Items */
             items: (components["schemas"]["UserMessageEvent"] | components["schemas"]["TurnBoundaryEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["TextCompleteEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["ThinkingCompleteEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["SubagentTaskEvent"] | components["schemas"]["ErrorEvent"])[];
+            /** Next Before Id */
+            next_before_id?: number | null;
             /** Session Id */
             session_id: string;
         };
@@ -1621,6 +1673,83 @@ export interface components {
              * @enum {string}
              */
             type: "run_state";
+        };
+        /** SandboxAsyncJobListToolResult */
+        SandboxAsyncJobListToolResult: {
+            /** Jobs */
+            jobs?: components["schemas"]["SandboxAsyncJobToolResult"][];
+        };
+        /**
+         * SandboxAsyncJobStatus
+         * @enum {string}
+         */
+        SandboxAsyncJobStatus: "running" | "completed" | "failed" | "canceled";
+        /** SandboxAsyncJobToolResult */
+        SandboxAsyncJobToolResult: {
+            /**
+             * Error
+             * @default null
+             */
+            error: string | null;
+            /**
+             * Exit Code
+             * @default null
+             */
+            exit_code: number | null;
+            /** Output Bytes */
+            output_bytes: number;
+            /**
+             * Output File
+             * @default
+             */
+            output_file: string;
+            /** Output Lines */
+            output_lines: number;
+            /** Run Id */
+            run_id: string;
+            status: components["schemas"]["SandboxAsyncJobStatus"];
+        };
+        /** SandboxCommandOutputChunk */
+        SandboxCommandOutputChunk: {
+            /**
+             * Content
+             * @default
+             */
+            content: string;
+            /** End Line */
+            end_line: number;
+            /** Output File */
+            output_file: string;
+            /** Start Line */
+            start_line: number;
+        };
+        /** SandboxCommandResultMetadata */
+        SandboxCommandResultMetadata: {
+            /**
+             * Error
+             * @default null
+             */
+            error: string | null;
+            /**
+             * Exit Code
+             * @default null
+             */
+            exit_code: number | null;
+            /** Output Bytes */
+            output_bytes: number;
+            /**
+             * Output File
+             * @default null
+             */
+            output_file: string | null;
+            /** Output Lines */
+            output_lines: number;
+            /**
+             * Run Id
+             * @default null
+             */
+            run_id: string | null;
+            status: components["schemas"]["SandboxAsyncJobStatus"];
         };
         /** SandboxContainerDefaultPortMappingsResponse */
         SandboxContainerDefaultPortMappingsResponse: {
@@ -2012,6 +2141,26 @@ export interface components {
              */
             type: "tool_result";
         };
+        /** ToolResultSchema */
+        ToolResultSchema: {
+            /**
+             * Output
+             * @default
+             */
+            output: string;
+            status: components["schemas"]["ToolResultStatusSchema"];
+            type: components["schemas"]["ToolResultTypeSchema"];
+        };
+        /**
+         * ToolResultStatusSchema
+         * @enum {string}
+         */
+        ToolResultStatusSchema: "success" | "error";
+        /**
+         * ToolResultTypeSchema
+         * @enum {string}
+         */
+        ToolResultTypeSchema: "skill_detail" | "knowledge_detail" | "knowledge_mutation" | "work_project";
         /** TurnBoundaryEvent */
         TurnBoundaryEvent: {
             /**
@@ -2054,6 +2203,8 @@ export interface components {
             model: string;
             /** Name */
             name: string;
+            /** Use Responses */
+            use_responses: boolean;
         };
         /** UpdateAgentSessionTitleRequest */
         UpdateAgentSessionTitleRequest: {
@@ -2452,7 +2603,10 @@ export interface operations {
     };
     list_agent_events_route_api_agent_sessions__session_id__events_get: {
         parameters: {
-            query?: never;
+            query?: {
+                before_id?: number | null;
+                limit?: number;
+            };
             header?: never;
             path: {
                 session_id: string;

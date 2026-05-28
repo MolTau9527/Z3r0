@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from uuid import uuid4
 
@@ -5,11 +6,11 @@ from sqlalchemy import delete, exists, func, text
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from core.agent.specs import DEFAULT_AGENT_CODE
+from core.agent.constants import DEFAULT_AGENT_CODE
 from core.delegation.subagents import cancel_session_subagent_runs
 from core.runtime.events import event_from_subagent_task, events_from_sdk_message
 from core.runtime.session import get_agent_pool, get_agent_registry
-from core.conversation.store import fetch_stored_items
+from core.conversation.store import StoredItem, fetch_stored_items
 from core.sandbox.command_jobs import cancel_session_async_sandbox_commands
 from database import get_async_session
 from logger import get_logger
@@ -28,12 +29,13 @@ from utils.sdk_tables import BOOTSTRAP_SESSION_ID, agent_messages, agent_session
 logger = get_logger(__name__)
 
 _TITLE_MAX_LEN = 80
+DEFAULT_REPLAY_EVENT_PAGE_SIZE = 80
 
 
 async def create_session(user_id: int) -> str:
     session_id = str(uuid4())
     async with get_async_session() as session:
-        await _ensure_sdk_session_row(session, session_id)
+        await ensure_sdk_session_row(session, session_id)
         session.add(AgentSessionMeta(
             session_id=session_id,
             session_type=SessionType.CHAT,
@@ -321,12 +323,38 @@ async def replay_session_events(
     session_id: str,
     user_id: int,
     user_role: SystemUserRole,
-) -> list[AgentContentEventSchema] | None:
+) -> tuple[list[AgentContentEventSchema], bool, int | None] | None:
+    return await replay_session_events_page(
+        session_id=session_id,
+        user_id=user_id,
+        user_role=user_role,
+        before_id=None,
+        limit=DEFAULT_REPLAY_EVENT_PAGE_SIZE,
+    )
+
+
+async def replay_session_events_page(
+    session_id: str,
+    user_id: int,
+    user_role: SystemUserRole,
+    *,
+    before_id: int | None,
+    limit: int,
+) -> tuple[list[AgentContentEventSchema], bool, int | None] | None:
     # nested-call items are tagged so the UI re-attaches them to the parent ToolCard
+    fetch_limit = max(1, limit) + 1
     async with get_async_session() as session:
         if not await _can_access_session(session, session_id, user_id, user_role):
             return None
-        stored_items = await fetch_stored_items(session, session_id)
+        stored_items = await fetch_stored_items(
+            session,
+            session_id,
+            before_id=before_id,
+            limit=fetch_limit,
+        )
+        has_more = len(stored_items) > limit
+        if has_more:
+            stored_items = _trim_replay_page_to_turn(stored_items[-limit:])
         sub_tasks = list((await session.exec(
             select(AgentSubordinateTask)
             .where(AgentSubordinateTask.session_id == session_id)
@@ -370,17 +398,22 @@ async def replay_session_events(
             created_at=task.updated_at,
         ))
 
-    return _attach_nested_replay_events(
+    events = _normalize_replay_events(_attach_nested_replay_events(
         top_level_events,
         nested_events_by_call_id,
         task_events_by_call_id,
-    )
+        include_orphans=not has_more,
+    ))
+    next_before_id = stored_items[0].message_id if has_more and stored_items else None
+    return events, has_more, next_before_id
 
 
 def _attach_nested_replay_events(
     top_level_events: list[AgentContentEventSchema],
     nested_events_by_call_id: dict[str, list[AgentContentEventSchema]],
     task_events_by_call_id: dict[str, list[AgentContentEventSchema]],
+    *,
+    include_orphans: bool = True,
 ) -> list[AgentContentEventSchema]:
     events: list[AgentContentEventSchema] = []
     for event in top_level_events:
@@ -392,10 +425,160 @@ def _attach_nested_replay_events(
             continue
         events.extend(task_events_by_call_id.pop(call_id, ()))
         events.extend(nested_events_by_call_id.pop(call_id, ()))
-    for call_id in sorted(set(task_events_by_call_id) | set(nested_events_by_call_id)):
-        events.extend(task_events_by_call_id.get(call_id, ()))
-        events.extend(nested_events_by_call_id.get(call_id, ()))
+    if include_orphans:
+        for call_id in sorted(set(task_events_by_call_id) | set(nested_events_by_call_id)):
+            events.extend(task_events_by_call_id.get(call_id, ()))
+            events.extend(nested_events_by_call_id.get(call_id, ()))
     return events
+
+
+def _trim_replay_page_to_turn(stored_items: list[StoredItem]) -> list[StoredItem]:
+    for index, stored in enumerate(stored_items):
+        if _is_top_level_user_item(stored):
+            return stored_items[index:]
+    return stored_items
+
+
+def _is_top_level_user_item(stored: StoredItem) -> bool:
+    if stored.nested_call_id:
+        return False
+    return stored.item.get("role") == "user"
+
+
+def _normalize_replay_events(events: list[AgentContentEventSchema]) -> list[AgentContentEventSchema]:
+    """Collapse duplicate persisted facts before the UI rebuilds transcript state."""
+    normalized: list[AgentContentEventSchema] = []
+    turn_seen_text: set[tuple[str, str, str, str]] = set()
+    tool_indexes: dict[tuple[str, str, str], int] = {}
+    tool_result_indexes: dict[tuple[str, str, str], int] = {}
+    tool_semantic_indexes: dict[tuple[str, str, str, str], int] = {}
+    tool_call_aliases: dict[tuple[str, str, str], str] = {}
+    subagent_indexes: dict[str, int] = {}
+
+    for event in events:
+        event = _normalize_tool_call_id(event, tool_call_aliases)
+        event_type = str(getattr(event, "type", ""))
+        if event_type in {"user_message", "turn_boundary"} and not getattr(event, "nested_call_id", ""):
+            turn_seen_text.clear()
+            tool_indexes.clear()
+            tool_result_indexes.clear()
+            tool_semantic_indexes.clear()
+            tool_call_aliases.clear()
+            subagent_indexes.clear()
+            normalized.append(event)
+            continue
+
+        if event_type in {"text_complete", "thinking_complete"}:
+            key = (
+                event_type,
+                getattr(event, "nested_for", ""),
+                getattr(event, "nested_call_id", ""),
+                getattr(event, "text", ""),
+            )
+            if key in turn_seen_text:
+                continue
+            turn_seen_text.add(key)
+            normalized.append(event)
+            continue
+
+        if event_type == "tool_call":
+            key = _tool_event_key(event)
+            semantic_key = _tool_semantic_key(event)
+            existing_index = tool_indexes.get(key)
+            if existing_index is None:
+                existing_index = tool_semantic_indexes.get(semantic_key)
+            if existing_index is None:
+                tool_indexes[key] = len(normalized)
+                tool_semantic_indexes[semantic_key] = len(normalized)
+                normalized.append(event)
+            else:
+                existing = normalized[existing_index]
+                existing_call_id = getattr(existing, "call_id", "")
+                incoming_call_id = getattr(event, "call_id", "")
+                if existing_call_id and incoming_call_id and existing_call_id != incoming_call_id:
+                    tool_call_aliases[key] = existing_call_id
+                normalized[existing_index] = _merge_tool_call(existing, event, call_id=existing_call_id)
+            continue
+
+        if event_type == "tool_result":
+            key = _tool_event_key(event)
+            existing_index = tool_result_indexes.get(key)
+            if existing_index is None:
+                tool_result_indexes[key] = len(normalized)
+                normalized.append(event)
+            else:
+                normalized[existing_index] = event
+            continue
+
+        if event_type == "subagent_task":
+            run_id = getattr(event, "run_id", "")
+            existing_index = subagent_indexes.get(run_id)
+            if run_id and existing_index is not None:
+                normalized[existing_index] = event
+            else:
+                if run_id:
+                    subagent_indexes[run_id] = len(normalized)
+                normalized.append(event)
+            continue
+
+        normalized.append(event)
+
+    return normalized
+
+
+def _merge_tool_call(
+    existing: AgentContentEventSchema,
+    incoming: AgentContentEventSchema,
+    *,
+    call_id: str,
+) -> AgentContentEventSchema:
+    if getattr(incoming, "name", "") or getattr(incoming, "arguments", None):
+        return incoming.model_copy(update={"call_id": call_id}) if call_id else incoming
+    return existing
+
+
+def _normalize_tool_call_id(
+    event: AgentContentEventSchema,
+    aliases: dict[tuple[str, str, str], str],
+) -> AgentContentEventSchema:
+    if str(getattr(event, "type", "")) not in {"tool_call", "tool_result"}:
+        return event
+    alias = aliases.get(_tool_event_key(event))
+    if not alias or getattr(event, "call_id", "") == alias:
+        return event
+    return event.model_copy(update={"call_id": alias})
+
+
+def _tool_event_key(event: AgentContentEventSchema) -> tuple[str, str, str]:
+    call_id = getattr(event, "call_id", "")
+    if call_id:
+        identity = call_id
+    else:
+        identity = ":".join((
+            getattr(event, "name", ""),
+            _stable_json(getattr(event, "arguments", {})),
+        ))
+    return (
+        getattr(event, "nested_for", ""),
+        getattr(event, "nested_call_id", ""),
+        identity,
+    )
+
+
+def _tool_semantic_key(event: AgentContentEventSchema) -> tuple[str, str, str, str]:
+    return (
+        getattr(event, "nested_for", ""),
+        getattr(event, "nested_call_id", ""),
+        getattr(event, "name", ""),
+        _stable_json(getattr(event, "arguments", {})),
+    )
+
+
+def _stable_json(value) -> str:
+    try:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    except TypeError:
+        return str(value)
 
 
 async def can_access_session(session_id: str, user_id: int, user_role: SystemUserRole) -> bool:
@@ -403,9 +586,13 @@ async def can_access_session(session_id: str, user_id: int, user_role: SystemUse
         return await _can_access_session(session, session_id, user_id, user_role)
 
 
-async def project_id_for_session(session_id: str) -> int | None:
+async def get_session_meta(session_id: str) -> AgentSessionMeta | None:
     async with get_async_session() as session:
-        meta = await session.get(AgentSessionMeta, session_id)
+        return await session.get(AgentSessionMeta, session_id)
+
+
+async def project_id_for_session(session_id: str) -> int | None:
+    meta = await get_session_meta(session_id)
     return meta.project_id if meta is not None else None
 
 
@@ -454,7 +641,7 @@ async def _delete_session_records_in_tx(session: AsyncSession, session_id: str) 
     return (result.rowcount or 0) > 0
 
 
-async def _ensure_sdk_session_row(session: AsyncSession, session_id: str) -> None:
+async def ensure_sdk_session_row(session: AsyncSession, session_id: str) -> None:
     # placeholder row owned by the SDK; required so AgentSessionMeta's FK can
     # bind and so list_sessions can surface freshly-created empty conversations
     await session.execute(

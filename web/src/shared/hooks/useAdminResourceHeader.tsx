@@ -1,6 +1,6 @@
 import { Button } from "@douyinfe/semi-ui";
 import { Plus, RefreshCw } from "lucide-react";
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useCallback, useEffect, useRef } from "react";
 import { useAdminHeaderActions } from "../../app/layouts/AdminLayout";
 
 
@@ -9,7 +9,7 @@ type AdminResourceHeaderOptions = {
   refreshLabel: string;
   loading: boolean;
   onCreate?: () => void;
-  onRefresh: () => void;
+  onRefresh: () => void | Promise<void>;
   createIcon?: ReactNode;
   extraActions?: ReactNode;
   appendExtraActions?: boolean;
@@ -26,13 +26,25 @@ export function useAdminResourceHeader({
   appendExtraActions = false,
 }: AdminResourceHeaderOptions) {
   const setHeaderActions = useAdminHeaderActions();
+  const onCreateRef = useRef(onCreate);
+  const onRefreshRef = useRef(onRefresh);
+  onCreateRef.current = onCreate;
+  onRefreshRef.current = onRefresh;
+
+  const create = useCallback(() => {
+    onCreateRef.current?.();
+  }, []);
+  const refresh = useCallback(() => {
+    void onRefreshRef.current();
+  }, []);
+  const hasCreate = Boolean(onCreate);
 
   useEffect(() => {
     const refreshButton = (
-      <Button icon={<RefreshCw size={16} />} onClick={onRefresh} loading={loading} aria-label={refreshLabel} />
+      <Button icon={<RefreshCw size={16} />} onClick={refresh} loading={loading} aria-label={refreshLabel} />
     );
-    const createButton = createLabel && onCreate ? (
-      <Button icon={createIcon ?? <Plus size={16} />} theme="solid" type="danger" onClick={onCreate}>
+    const createButton = createLabel && hasCreate ? (
+      <Button icon={createIcon ?? <Plus size={16} />} theme="solid" type="danger" onClick={create}>
         {createLabel}
       </Button>
     ) : null;
@@ -51,9 +63,10 @@ export function useAdminResourceHeader({
     createIcon,
     createLabel,
     extraActions,
+    hasCreate,
     loading,
-    onCreate,
-    onRefresh,
+    create,
+    refresh,
     refreshLabel,
     setHeaderActions,
   ]);

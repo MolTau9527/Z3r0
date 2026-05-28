@@ -1,15 +1,22 @@
-.admin-shell {
+.admin-app {
   height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-shell {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   background: #f4f7fb;
 }
 
 .admin-sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 22px 16px;
@@ -25,7 +32,6 @@
   gap: 12px;
   align-items: center;
   padding: 0 8px 24px;
-  animation: contentFadeUp 360ms var(--ease-emphasized) both;
 }
 
 .brand-lockup > div:last-child {
@@ -106,7 +112,8 @@
 
 .admin-main {
   min-width: 0;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   display: grid;
   grid-template-rows: 78px minmax(0, 1fr);
   overflow: hidden;
@@ -122,7 +129,6 @@
   background: rgba(255, 255, 255, 0.9);
   border-bottom: 1px solid #e7edf4;
   backdrop-filter: blur(14px);
-  animation: contentFadeUp 320ms var(--ease-emphasized) both;
 }
 
 .admin-topbar h1 {
@@ -161,72 +167,53 @@
 
 .admin-content {
   position: relative;
-  overflow: auto;
-  min-height: 0;
-  padding: 24px 30px 30px;
-  background:
-    linear-gradient(115deg, rgba(217, 45, 58, 0.08), transparent 28%),
-    linear-gradient(245deg, rgba(33, 150, 153, 0.08), transparent 32%),
-    #f4f7fb;
-}
-
-.route-transition {
   min-width: 0;
   min-height: 0;
-  animation: contentFadeUp 260ms var(--ease-emphasized) both;
+  overflow: hidden;
+  background: #f4f7fb;
 }
 
-.route-transition:has(.playground-shell) {
+.admin-content-viewport {
+  position: relative;
+  width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.admin-content-viewport-scroll {
+  overflow: auto;
+  padding: 24px 30px 30px;
+}
+
+.admin-content-viewport-fixed {
+  overflow: hidden;
+}
+
+.admin-route {
+  min-width: 0;
+  min-height: 0;
+}
+
+.admin-route-fixed {
+  height: 100%;
+  overflow: hidden;
+}
+
+.admin-route-fixed .admin-route-fallback {
+  height: 100%;
+  min-height: 0;
 }
 
 .admin-route-fallback {
-  min-height: calc(100vh - 132px);
+  min-height: 100%;
   display: grid;
   place-items: center;
 }
 
-/* shared background decoration: subtle drifting grid + scanline overlay */
-.admin-content::before,
-.playground-main::before,
-.admin-content::after,
-.playground-main::after {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  content: "";
-}
-
-.admin-content::before,
-.playground-main::before {
-  opacity: 0.34;
-  background-image:
-    linear-gradient(rgba(16, 23, 34, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(16, 23, 34, 0.045) 1px, transparent 1px);
-  background-size: 48px 48px;
-  animation: gridDrift 18s linear infinite;
-}
-
-.admin-content::after,
-.playground-main::after {
-  opacity: 0.28;
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.72), transparent);
-  animation: scanline 7s ease-in-out infinite;
-}
-
-.admin-content > *,
-.playground-main > * {
-  position: relative;
-  z-index: 1;
-}
-
-.admin-content:has(.playground-shell) {
-  padding: 0;
-}
-
 @media (max-width: 900px) {
   .admin-shell {
-    height: 100vh;
+    height: 100%;
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
   }
@@ -239,7 +226,6 @@
   }
 
   .admin-sidebar {
-    position: static;
     height: auto;
     flex-direction: row;
     align-items: center;
@@ -290,8 +276,7 @@
     border-left: 0;
   }
 
-  .admin-content {
-    overflow: auto;
+  .admin-content-viewport-scroll {
     min-height: 0;
     padding: 18px;
   }

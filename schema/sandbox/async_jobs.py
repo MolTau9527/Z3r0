@@ -32,5 +32,4 @@ class SandboxAsyncJobSnapshot(BaseModel):
     updated_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
-
-
+    result_delivered_at: datetime | None = None

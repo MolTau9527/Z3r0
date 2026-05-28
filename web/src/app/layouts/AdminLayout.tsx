@@ -1,11 +1,12 @@
 import { Avatar, Button } from "@douyinfe/semi-ui";
 import { Box, Boxes, FolderKanban, LogOut, MessageSquareCode, Settings, Users } from "lucide-react";
-import { ReactNode, Suspense, useCallback, useState } from "react";
+import { ReactNode, Suspense, useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { SessionList } from "../../features/playground/SessionList";
 import { useAgentSessionContext } from "../../features/playground/AgentSessionProvider";
 import { useAuth } from "../../shared/auth/AuthProvider";
 import z3r0Logo from "../../assets/z3r0-logo.png";
+import { preloadAdminRoute, preloadAdminRoutes } from "../routePreload";
 
 type AdminLayoutContext = {
   setHeaderActions: (actions: ReactNode) => void;
@@ -43,11 +44,16 @@ export function AdminLayout() {
     deleteSession,
     refreshSessions,
     dropSessionRuntime,
-    ensureSessionRuntime,
+    syncSessions,
   } = useAgentSessionContext();
 
   const setHeaderActions = useCallback((actions: ReactNode) => {
     setHeaderActionsState(() => actions);
+  }, []);
+
+  useEffect(() => {
+    const id = window.setTimeout(preloadAdminRoutes, 300);
+    return () => window.clearTimeout(id);
   }, []);
 
   const refreshWorkProjects = useCallback(() => {
@@ -71,6 +77,7 @@ export function AdminLayout() {
   const isAdmin = user?.role === "admin";
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
   const activeItem = visibleNavItems.find((item) => location.pathname.startsWith(item.path));
+  const contentMode = location.pathname.startsWith("/playground") ? "fixed" : "scroll";
 
   return (
     <div className="admin-shell">
@@ -85,7 +92,13 @@ export function AdminLayout() {
 
         <div className="admin-sidebar-body">
           <div className="admin-sidebar-top">
-            <NavLink to="/playground" className="admin-nav-link">
+            <NavLink
+              to="/playground"
+              className="admin-nav-link"
+              onFocus={() => preloadAdminRoute("/playground")}
+              onPointerDown={() => preloadAdminRoute("/playground")}
+              onPointerEnter={() => preloadAdminRoute("/playground")}
+            >
               <MessageSquareCode size={18} />
               <span>Playground</span>
             </NavLink>
@@ -100,7 +113,7 @@ export function AdminLayout() {
                 onDelete={deleteSession}
                 onRefreshSessions={refreshSessions}
                 onDropRuntime={dropSessionRuntime}
-                onEnsureRuntime={ensureSessionRuntime}
+                onSyncSessions={syncSessions}
               />
             </div>
           </div>
@@ -109,7 +122,14 @@ export function AdminLayout() {
             {visibleNavItems.slice(1).map((item) => {
               const Icon = item.icon;
               return (
-                <NavLink key={item.path} to={item.path} className="admin-nav-link">
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className="admin-nav-link"
+                  onFocus={() => preloadAdminRoute(item.path)}
+                  onPointerDown={() => preloadAdminRoute(item.path)}
+                  onPointerEnter={() => preloadAdminRoute(item.path)}
+                >
                   <Icon size={18} />
                   <span>{item.label}</span>
                 </NavLink>
@@ -134,10 +154,14 @@ export function AdminLayout() {
           </div>
         </header>
         <main className="admin-content">
-          <div key={activeItem?.path ?? location.pathname} className="route-transition">
-            <Suspense fallback={<AdminRouteFallback />}>
-              <Outlet context={outletContext} />
-            </Suspense>
+          <div className={`admin-content-viewport admin-content-viewport-${contentMode}`}>
+            <div
+              className={`admin-route admin-route-${contentMode}`}
+            >
+              <Suspense fallback={<AdminRouteFallback />}>
+                <Outlet context={outletContext} />
+              </Suspense>
+            </div>
           </div>
         </main>
       </div>

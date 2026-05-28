@@ -7,7 +7,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from core.runtime.context import AgentRuntimeContext
+from core.runtime.notification_dispatch import (
+    drain_main_agent_notifications_from_session,
+    is_main_agent_instance,
+    signal_target_notifications,
+)
 from logger import get_logger
+from service.agent import notifications as agent_notifications
 from service.sandbox import async_jobs as sandbox_async_jobs
 from service.sandbox.commands import SandboxContainerCommandTimeoutError, execute_sandbox_container_command
 
@@ -31,17 +37,27 @@ _AsyncCommandJobPredicate = Callable[[str, _AsyncCommandJob], bool]
 
 
 async def start_async_sandbox_runtime() -> None:
-    await sandbox_async_jobs.mark_stale_running_async_jobs_failed()
+    snapshots = await sandbox_async_jobs.mark_stale_running_async_jobs_failed()
+    for snapshot in snapshots:
+        await _queue_completion_notification(snapshot)
 
 
 async def start_async_sandbox_command(
     *,
     run_id: str,
     context: AgentRuntimeContext,
+    command: str,
+    output_file: str,
     wrapped_command: str,
     stat_command: str,
     timeout_seconds: int,
 ) -> None:
+    await _create_job_record(
+        run_id=run_id,
+        context=context,
+        command=command,
+        output_file=output_file,
+    )
     async with _jobs_lock:
         task = asyncio.create_task(
             _run_async_sandbox_command(
@@ -70,41 +86,54 @@ async def cancel_agent_async_sandbox_commands(
     runtime_canceled = await _cancel_runtime_jobs(
         lambda _, job: job.session_id == session_id and job.agent_instance_id == agent_instance_id
     )
+    if runtime_canceled:
+        return True
     snapshots = await sandbox_async_jobs.cancel_running_async_jobs_for_agent(
         session_id=session_id,
         agent_instance_id=agent_instance_id,
         error="Sandbox async job canceled.",
     )
+    await _queue_completion_notifications(snapshots)
     return runtime_canceled or bool(snapshots)
 
 
 async def cancel_async_sandbox_command(run_id: str) -> bool:
     runtime_canceled = await _cancel_runtime_jobs(lambda candidate, _: candidate == run_id)
+    if runtime_canceled:
+        return True
     snapshot = await sandbox_async_jobs.cancel_async_job(run_id, "Sandbox async job cancel requested.")
+    await _queue_completion_notification(snapshot)
     return runtime_canceled or snapshot is not None
 
 
 async def cancel_sandbox_async_commands(container_id: int) -> bool:
     runtime_canceled = await _cancel_runtime_jobs(lambda _, job: job.sandbox_container_id == container_id)
+    if runtime_canceled:
+        return True
     snapshots = await sandbox_async_jobs.cancel_running_async_jobs_for_container(
         container_id,
         "Sandbox async job canceled.",
     )
+    await _queue_completion_notifications(snapshots)
     return runtime_canceled or bool(snapshots)
 
 
 async def cancel_session_async_sandbox_commands(session_id: str) -> bool:
     runtime_canceled = await _cancel_runtime_jobs(lambda _, job: job.session_id == session_id)
+    if runtime_canceled:
+        return True
     snapshots = await sandbox_async_jobs.cancel_running_async_jobs_for_session(
         session_id,
         "Sandbox async job canceled.",
     )
+    await _queue_completion_notifications(snapshots)
     return runtime_canceled or bool(snapshots)
 
 
 async def stop_async_sandbox_commands() -> None:
     await _cancel_runtime_jobs(lambda _, __: True)
-    await sandbox_async_jobs.cancel_running_async_jobs("Sandbox async job canceled by runtime shutdown.")
+    snapshots = await sandbox_async_jobs.cancel_running_async_jobs("Sandbox async job canceled by runtime shutdown.")
+    await _queue_completion_notifications(snapshots)
 
 
 async def _cancel_runtime_jobs(predicate: _AsyncCommandJobPredicate) -> bool:
@@ -142,20 +171,42 @@ async def _run_async_sandbox_command(
             timeout_seconds=timeout_seconds,
         )
         output_bytes, output_lines = await _stat_output_file(context.sandbox_container_id, stat_command)
-        await sandbox_async_jobs.complete_async_job(
+        snapshot = await sandbox_async_jobs.complete_async_job(
             run_id,
             exit_code=result.exit_code,
             output_bytes=output_bytes,
             output_lines=output_lines,
         )
+        await _queue_completion_notification(snapshot)
     except asyncio.CancelledError:
-        await sandbox_async_jobs.cancel_async_job(run_id, "Sandbox async job canceled.")
+        output_bytes, output_lines = await _stat_output_file(context.sandbox_container_id, stat_command)
+        snapshot = await sandbox_async_jobs.cancel_async_job(
+            run_id,
+            "Sandbox async job canceled.",
+            output_bytes=output_bytes,
+            output_lines=output_lines,
+        )
+        await _queue_completion_notification(snapshot)
         raise
     except SandboxContainerCommandTimeoutError:
-        await sandbox_async_jobs.fail_async_job(run_id, _COMMAND_TIMEOUT_ERROR)
+        output_bytes, output_lines = await _stat_output_file(context.sandbox_container_id, stat_command)
+        snapshot = await sandbox_async_jobs.fail_async_job(
+            run_id,
+            _COMMAND_TIMEOUT_ERROR,
+            output_bytes=output_bytes,
+            output_lines=output_lines,
+        )
+        await _queue_completion_notification(snapshot)
     except Exception as exc:
         logger.exception("async sandbox command execution failed: %s", run_id)
-        await sandbox_async_jobs.fail_async_job(run_id, str(exc) or "Sandbox async job failed.")
+        output_bytes, output_lines = await _stat_output_file(context.sandbox_container_id, stat_command)
+        snapshot = await sandbox_async_jobs.fail_async_job(
+            run_id,
+            str(exc) or "Sandbox async job failed.",
+            output_bytes=output_bytes,
+            output_lines=output_lines,
+        )
+        await _queue_completion_notification(snapshot)
     finally:
         async with _jobs_lock:
             current = _jobs.get(run_id)
@@ -189,3 +240,73 @@ def _finish_async_sandbox_command(run_id: str, task: asyncio.Task[None]) -> None
         pass
     except Exception:
         logger.exception("async sandbox command task failed: %s", run_id)
+
+
+async def _ensure_agent_capacity(session_id: str, agent_instance_id: str) -> None:
+    running = await sandbox_async_jobs.count_running_async_jobs_for_agent(
+        session_id=session_id,
+        agent_instance_id=agent_instance_id,
+    )
+    if running >= 3:
+        raise RuntimeError("sandbox async command limit reached; at most 3 commands may run concurrently")
+
+
+async def _create_job_record(
+    *,
+    run_id: str,
+    context: AgentRuntimeContext,
+    command: str,
+    output_file: str,
+) -> None:
+    await _ensure_agent_capacity(context.session_id, context.agent_instance_id)
+    await sandbox_async_jobs.create_async_job(
+        run_id=run_id,
+        session_id=context.session_id,
+        agent_code=context.agent_code,
+        agent_instance_id=context.agent_instance_id,
+        command=command,
+        output_file=output_file,
+        nested_for_agent_code=context.nested_for_agent_code,
+        nested_call_id=context.nested_call_id,
+        sandbox_container_id=context.sandbox_container_id,
+        sandbox_container_generation=context.sandbox_container_generation,
+        sandbox_skill_metadata=context.sandbox_skill_metadata,
+    )
+
+
+async def _queue_completion_notification(snapshot) -> None:
+    if snapshot is None:
+        return
+    try:
+        snapshot = await sandbox_async_jobs.claim_async_job_result_for_notification(snapshot)
+        if snapshot is None:
+            return
+        notification = await agent_notifications.enqueue_sandbox_async_job_finished_notification(snapshot)
+        if notification is not None:
+            await signal_target_notifications(snapshot.agent_instance_id)
+            if is_main_agent_instance(snapshot.agent_instance_id):
+                asyncio.create_task(
+                    _try_start_notification_drain(snapshot),
+                    name=f"sandbox-async-notify-{snapshot.run_id}",
+                )
+    except Exception:
+        logger.exception("failed to queue sandbox async job notification: %s", snapshot.run_id)
+
+
+async def _queue_completion_notifications(snapshots) -> None:
+    for snapshot in snapshots:
+        await _queue_completion_notification(snapshot)
+
+
+async def _try_start_notification_drain(snapshot) -> None:
+    try:
+        await drain_main_agent_notifications_from_session(
+            session_id=snapshot.session_id,
+            target_agent_instance_id=snapshot.agent_instance_id,
+            agent_code=snapshot.agent_code,
+            sandbox_container_id=snapshot.sandbox_container_id,
+            nested_for_agent_code=snapshot.nested_for_agent_code,
+            nested_call_id=snapshot.nested_call_id,
+        )
+    except Exception:
+        logger.exception("failed to start sandbox async notification drain: %s", snapshot.run_id)

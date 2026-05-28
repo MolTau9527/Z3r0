@@ -43,6 +43,8 @@ class ListAgentSessionsResponse(BaseModel):
 class ListAgentEventsResponse(BaseModel):
     session_id: str
     items: list[AgentContentEventSchema]
+    has_more: bool = False
+    next_before_id: int | None = None
 
 
 # create agent session response schema (server-allocated session_id)

@@ -4,26 +4,29 @@ from __future__ import annotations
 
 import json
 import hashlib
-from functools import lru_cache
 from dataclasses import dataclass
 from typing import Any
 
 import tiktoken
 from agents import Agent, ModelSettings, Runner, TResponseInputItem
-from agents.extensions.models.litellm_model import LitellmModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import AgentConfig, get_config
-from core.conversation.projection_types import ContextProjection, ProjectedItem, ProjectionCompaction
+from core.agent.models import build_openai_model
+from core.conversation.projection import ContextProjection, ProjectedItem, ProjectionCompaction
 from logger import get_logger
 from model.agent.context_compactions import AgentContextCompaction
 
 
 logger = get_logger(__name__)
 
-_SUMMARY_PREFIX = "# Earlier Conversation Summary\n\n"
-_SUMMARY_AGENT_INSTRUCTIONS = """You compress earlier agent conversation history for future continuation.
+_SUMMARY_PREFIX = "# Context Summary\n\n"
+_SUMMARY_AGENT_INSTRUCTIONS = """# Runtime Guidance
+
+## Context Compression
+
+Compress earlier agent conversation items for future continuation.
 
 Write a concise but information-dense Markdown summary using exactly these sections:
 
@@ -74,6 +77,7 @@ def estimate_projection_tokens(projection: ContextProjection, model: str) -> Con
             item=item.item,
             source_message_ids=item.source_message_ids,
             token_estimate=item.token_estimate or estimate_items_tokens([item.item], model),
+            atomic_group=item.atomic_group,
         )
         for item in projection.projected_items
     ])
@@ -95,6 +99,7 @@ async def get_latest_compaction(sess: AsyncSession, scope: CompactionScope) -> P
         return None
     return ProjectionCompaction(
         id=row.id,
+        start_message_id=row.start_message_id,
         end_message_id=row.end_message_id,
         summary_item=row.summary_item,
     )
@@ -255,19 +260,34 @@ def _select_compaction_candidates(
 
     candidates: list[ProjectedItem] = []
     removed_tokens = 0
+    open_atomic_groups: set[str] = set()
+    last_complete_index = -1
     for item in projected_items[:compact_count]:
         if not item.source_message_ids:
             continue
         candidates.append(item)
+        if item.atomic_group:
+            if item.atomic_group in open_atomic_groups:
+                open_atomic_groups.remove(item.atomic_group)
+            else:
+                open_atomic_groups.add(item.atomic_group)
         removed_tokens += item.token_estimate
+        if not open_atomic_groups and len(candidates) >= cfg.context_compression_min_items:
+            last_complete_index = len(candidates) - 1
         estimated_after_compaction = projected_tokens - removed_tokens + summary_max_tokens
-        if estimated_after_compaction <= target_tokens and len(candidates) >= cfg.context_compression_min_items:
+        if (
+            estimated_after_compaction <= target_tokens
+            and len(candidates) >= cfg.context_compression_min_items
+            and not open_atomic_groups
+        ):
             return candidates
 
     # If the target cannot be reached because the recent tail or incoming prompt is too large,
     # compact all eligible prefix items and let the next turn decide whether another pass is needed.
     if incoming_tokens >= target_tokens:
         logger.debug("incoming prompt tokens exceed compression target: incoming=%d target=%d", incoming_tokens, target_tokens)
+    if open_atomic_groups:
+        return candidates[:last_complete_index + 1]
     return candidates
 
 
@@ -338,22 +358,27 @@ async def _summarize_items(items: list[TResponseInputItem], agent_config: AgentC
     cfg = get_config().agent_runtime
     agent = Agent(
         name="Context Compressor",
-        model=LitellmModel(base_url=agent_config.base_url, api_key=agent_config.api_key, model=agent_config.model),
+        model=build_openai_model(agent_config),
         model_settings=ModelSettings(max_tokens=cfg.context_compression_summary_max_tokens),
         instructions=_SUMMARY_AGENT_INSTRUCTIONS,
     )
-    payload = json.dumps(_summary_safe_value(items), ensure_ascii=False, indent=2)
-    result = await Runner.run(
-        starting_agent=agent,
-        input=(
-            "Compress the following earlier conversation items into a replacement summary. "
-            "Return only the summary.\n\n"
-            f"```json\n{payload}\n```"
-        ),
-        max_turns=1,
-    )
-    output = getattr(result, "final_output", "")
-    return output if isinstance(output, str) else str(output or "")
+    try:
+        payload = json.dumps(_summary_safe_value(items), ensure_ascii=False, indent=2)
+        result = await Runner.run(
+            starting_agent=agent,
+            input=(
+                "# Context Compression Input\n\n"
+                "Compress the following earlier conversation items into a replacement summary. "
+                "Return only the summary body with the required sections.\n\n"
+                "## Items\n\n"
+                f"```json\n{payload}\n```"
+            ),
+            max_turns=1,
+        )
+        output = getattr(result, "final_output", "")
+        return output if isinstance(output, str) else str(output or "")
+    finally:
+        await agent.model.close()
 
 
 def _summary_item(summary_text: str) -> TResponseInputItem:
@@ -363,7 +388,7 @@ def _summary_item(summary_text: str) -> TResponseInputItem:
         "role": "user",
         "content": [{
             "type": "input_text",
-            "text": _SUMMARY_PREFIX + "This is an automatically generated summary of earlier conversation, not a new user request.\n\n" + summary_text.strip(),
+            "text": _SUMMARY_PREFIX + "This is context, not a new user request. Continue from the summary below.\n\n" + summary_text.strip(),
         }],
     }
 
@@ -392,34 +417,8 @@ def _image_media_type(image_url: Any) -> str:
     return media_type or "image/*"
 
 
-@lru_cache(maxsize=256)
-def model_context_window(model: str, base_url: str = "") -> int:
-    try:
-        import litellm
-
-        info = litellm.get_model_info(model=model, api_base=base_url or None)
-    except Exception as exc:
-        logger.warning(
-            "model context window unavailable; automatic compaction disabled for model=%s reason=%s",
-            model,
-            _one_line_error(exc),
-        )
-        return 0
-    value = None
-    if isinstance(info, dict):
-        value = info.get("max_input_tokens") or info.get("max_tokens")
-    else:
-        value = getattr(info, "max_input_tokens", None) or getattr(info, "max_tokens", None)
-    try:
-        return int(value or 0)
-    except (TypeError, ValueError):
-        return 0
-
-
 def resolve_context_window(agent_config: AgentConfig) -> int:
-    if agent_config.context_window > 0:
-        return agent_config.context_window
-    return model_context_window(agent_config.model, agent_config.base_url)
+    return agent_config.context_window
 
 
 def _one_line_error(exc: Exception) -> str:

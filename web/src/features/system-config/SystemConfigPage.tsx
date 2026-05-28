@@ -1,8 +1,9 @@
 import { Button, Input, InputNumber, Spin, Switch, TextArea } from "@douyinfe/semi-ui";
 import { Bot, RotateCcw, Save, Settings, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getInstanceConfig, updateInstanceConfig } from "../../shared/api/systemConfig";
 import { showApiError, showApiSuccess } from "../../shared/api/feedback";
+import { MetricStrip } from "../../shared/components/ResourcePageShell";
 import type {
   AgentConfig,
   AgentPoolConfig,
@@ -20,6 +21,21 @@ type ConfigFormValue = {
   agents: AgentFormValue[];
   agent_pool: AgentPoolConfig;
   agent_runtime: AgentRuntimeConfig;
+};
+
+type FieldKey<T, Value> = {
+  [Key in keyof T]: T[Key] extends Value ? Key : never;
+}[keyof T];
+
+type ConfigField<T> =
+  | { kind: "number"; key: FieldKey<T, number>; label: string; min?: number; max?: number; step?: number }
+  | { kind: "toggle"; key: FieldKey<T, boolean>; label: string };
+
+type AgentTextField = {
+  key: keyof Pick<AgentConfig, "name" | "base_url" | "model" | "api_key">;
+  label: string;
+  maxLength?: number;
+  password?: boolean;
 };
 
 const DEFAULT_AGENT_POOL: AgentPoolConfig = {
@@ -42,10 +58,38 @@ const DEFAULT_AGENT_RUNTIME: AgentRuntimeConfig = {
   context_compression_summary_max_tokens: 8000,
 };
 
+const RUNTIME_FIELDS: ConfigField<AgentRuntimeConfig>[] = [
+  { kind: "number", key: "main_max_turns", label: "Main Max Turns", min: 1 },
+  { kind: "number", key: "subordinate_max_turns", label: "Subordinate Max Turns", min: 1 },
+  { kind: "number", key: "model_stream_idle_timeout_seconds", label: "Stream Idle Timeout", min: 30 },
+  { kind: "toggle", key: "context_compression_enabled", label: "Context Compression" },
+  { kind: "number", key: "context_compression_trigger_ratio", label: "Trigger Ratio", min: 0.01, max: 0.99, step: 0.01 },
+  { kind: "number", key: "context_compression_hard_stop_ratio", label: "Hard Stop Ratio", min: 0.01, max: 0.99, step: 0.01 },
+  { kind: "number", key: "context_compression_target_ratio", label: "Target Ratio", min: 0.01, max: 0.99, step: 0.01 },
+  { kind: "number", key: "context_compression_preserve_recent_ratio", label: "Preserve Recent Ratio", min: 0.01, max: 0.99, step: 0.01 },
+  { kind: "number", key: "context_compression_preserve_recent_items", label: "Preserve Recent Items", min: 1 },
+  { kind: "number", key: "context_compression_min_items", label: "Minimum Items", min: 1 },
+  { kind: "number", key: "context_compression_summary_max_tokens", label: "Summary Max Tokens", min: 512 },
+];
+
+const POOL_FIELDS: ConfigField<AgentPoolConfig>[] = [
+  { kind: "number", key: "max_size", label: "Max Size", min: 1 },
+  { kind: "number", key: "ttl_seconds", label: "TTL Seconds", min: 0 },
+  { kind: "number", key: "sweep_interval_seconds", label: "Sweep Interval Seconds", min: 1 },
+];
+
+const AGENT_TEXT_FIELDS: AgentTextField[] = [
+  { key: "name", label: "Name", maxLength: 128 },
+  { key: "base_url", label: "Base URL" },
+  { key: "model", label: "Model" },
+  { key: "api_key", label: "API Key", password: true },
+];
+
 function toFormValue(config: InstanceConfig): ConfigFormValue {
   const agents = Object.entries(config.agents ?? {}).map(([code, agent]) => ({
     ...agent,
     code: agent.code || code,
+    use_responses: agent.use_responses ?? false,
     rowId: crypto.randomUUID(),
   }));
   return {
@@ -74,6 +118,7 @@ function toPayload(values: ConfigFormValue): UpdateInstanceConfigRequest {
       base_url: agent.base_url.trim(),
       api_key: agent.api_key.trim(),
       model: agent.model.trim(),
+      use_responses: agent.use_responses,
       context_window: agent.context_window,
     };
   });
@@ -179,74 +224,20 @@ export function SystemConfigPage() {
 
   return (
     <section className="system-config-page">
-      <div className="metric-strip">
-        {metrics.map((metric) => (
-          <div className="metric-card" key={metric.label}>
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-          </div>
-        ))}
-      </div>
+      <MetricStrip metrics={metrics} />
 
       <Spin spinning={loading} wrapperClassName="system-config-spin">
         {values ? (
           <div className="system-config-layout">
-            <div className="config-panel">
-              <ConfigPanelHeader icon={<Settings size={18} />} title="Runtime" />
-              <div className="config-grid">
-                <NumberField label="Main Max Turns" value={values.agent_runtime.main_max_turns} min={1}
-                  onChange={(main_max_turns) => updateRuntime({ main_max_turns })}
-                />
-                <NumberField label="Subordinate Max Turns" value={values.agent_runtime.subordinate_max_turns} min={1}
-                  onChange={(subordinate_max_turns) => updateRuntime({ subordinate_max_turns })}
-                />
-                <NumberField label="Stream Idle Timeout" value={values.agent_runtime.model_stream_idle_timeout_seconds} min={30}
-                  onChange={(model_stream_idle_timeout_seconds) => updateRuntime({ model_stream_idle_timeout_seconds })}
-                />
-                <ToggleField label="Context Compression" checked={values.agent_runtime.context_compression_enabled}
-                  onChange={(context_compression_enabled) => updateRuntime({ context_compression_enabled })}
-                />
-                <NumberField label="Trigger Ratio" value={values.agent_runtime.context_compression_trigger_ratio} min={0.01} max={0.99} step={0.01}
-                  onChange={(context_compression_trigger_ratio) => updateRuntime({ context_compression_trigger_ratio })}
-                />
-                <NumberField label="Hard Stop Ratio" value={values.agent_runtime.context_compression_hard_stop_ratio} min={0.01} max={0.99} step={0.01}
-                  onChange={(context_compression_hard_stop_ratio) => updateRuntime({ context_compression_hard_stop_ratio })}
-                />
-                <NumberField label="Target Ratio" value={values.agent_runtime.context_compression_target_ratio} min={0.01} max={0.99} step={0.01}
-                  onChange={(context_compression_target_ratio) => updateRuntime({ context_compression_target_ratio })}
-                />
-                <NumberField label="Preserve Recent Ratio" value={values.agent_runtime.context_compression_preserve_recent_ratio} min={0.01} max={0.99} step={0.01}
-                  onChange={(context_compression_preserve_recent_ratio) => updateRuntime({ context_compression_preserve_recent_ratio })}
-                />
-                <NumberField label="Preserve Recent Items" value={values.agent_runtime.context_compression_preserve_recent_items} min={1}
-                  onChange={(context_compression_preserve_recent_items) => updateRuntime({ context_compression_preserve_recent_items })}
-                />
-                <NumberField label="Minimum Items" value={values.agent_runtime.context_compression_min_items} min={1}
-                  onChange={(context_compression_min_items) => updateRuntime({ context_compression_min_items })}
-                />
-                <NumberField label="Summary Max Tokens" value={values.agent_runtime.context_compression_summary_max_tokens} min={512}
-                  onChange={(context_compression_summary_max_tokens) => updateRuntime({ context_compression_summary_max_tokens })}
-                />
-              </div>
-            </div>
+            <ConfigPanel icon={<Settings size={18} />} title="Runtime">
+              <ConfigFieldGrid fields={RUNTIME_FIELDS} values={values.agent_runtime} onChange={updateRuntime} />
+            </ConfigPanel>
 
-            <div className="config-panel">
-              <ConfigPanelHeader icon={<RotateCcw size={18} />} title="Agent Pool" />
-              <div className="config-grid compact">
-                <NumberField label="Max Size" value={values.agent_pool.max_size} min={1}
-                  onChange={(max_size) => updatePool({ max_size })}
-                />
-                <NumberField label="TTL Seconds" value={values.agent_pool.ttl_seconds} min={0}
-                  onChange={(ttl_seconds) => updatePool({ ttl_seconds })}
-                />
-                <NumberField label="Sweep Interval Seconds" value={values.agent_pool.sweep_interval_seconds} min={1}
-                  onChange={(sweep_interval_seconds) => updatePool({ sweep_interval_seconds })}
-                />
-              </div>
-            </div>
+            <ConfigPanel icon={<RotateCcw size={18} />} title="Agent Pool">
+              <ConfigFieldGrid compact fields={POOL_FIELDS} values={values.agent_pool} onChange={updatePool} />
+            </ConfigPanel>
 
-            <div className="config-panel agents-panel">
-              <ConfigPanelHeader icon={<Bot size={18} />} title="Agents" />
+            <ConfigPanel icon={<Bot size={18} />} title="Agents">
               <div className="agent-config-list">
                 {values.agents.map((agent) => (
                   <AgentConfigEditor
@@ -256,31 +247,66 @@ export function SystemConfigPage() {
                   />
                 ))}
               </div>
-            </div>
+            </ConfigPanel>
           </div>
         ) : null}
       </Spin>
-
     </section>
   );
 }
 
-function ConfigPanelHeader({ icon, title, children }: { icon: React.ReactNode; title: string; children?: React.ReactNode }) {
+function ConfigPanel({ children, icon, title }: { children: ReactNode; icon: ReactNode; title: string }) {
   return (
-    <div className="config-panel-header">
-      <div>
-        {icon}
-        <h2>{title}</h2>
+    <div className="config-panel">
+      <div className="config-panel-header">
+        <div>
+          {icon}
+          <h2>{title}</h2>
+        </div>
       </div>
       {children}
     </div>
   );
 }
 
-function AgentConfigEditor({
-  agent,
-  onChange,
-}: {
+function ConfigFieldGrid<T extends object>({ compact = false, fields, values, onChange }: {
+  compact?: boolean;
+  fields: ConfigField<T>[];
+  values: T;
+  onChange: (patch: Partial<T>) => void;
+}) {
+  return (
+    <div className={`config-grid${compact ? " compact" : ""}`}>
+      {fields.map((field) => {
+        if (field.kind === "toggle") {
+          return (
+            <Field
+              key={String(field.key)}
+              kind="toggle"
+              label={field.label}
+              value={values[field.key] as boolean}
+              onChange={(checked) => onChange({ [field.key]: checked } as Partial<T>)}
+            />
+          );
+        }
+        return (
+          <Field
+            key={String(field.key)}
+            kind="number"
+            label={field.label}
+            value={values[field.key] as number}
+            min={field.min}
+            max={field.max}
+            step={field.step}
+            onChange={(value) => onChange({ [field.key]: value } as Partial<T>)}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function AgentConfigEditor({ agent, onChange }: {
   agent: AgentFormValue;
   onChange: (patch: Partial<AgentConfig>) => void;
 }) {
@@ -291,12 +317,22 @@ function AgentConfigEditor({
         <span>{agent.code}</span>
       </div>
       <div className="agent-form-grid">
-        <TextField label="Name" value={agent.name} maxLength={128} onChange={(name) => onChange({ name })} />
-        <TextField label="Base URL" value={agent.base_url} onChange={(base_url) => onChange({ base_url })} />
-        <TextField label="Model" value={agent.model} onChange={(model) => onChange({ model })} />
-        <TextField label="API Key" value={agent.api_key} password onChange={(api_key) => onChange({ api_key })} />
-        <NumberField label="Context Window" value={agent.context_window} min={0}
+        {AGENT_TEXT_FIELDS.map((field) => (
+          <Field
+            key={field.key}
+            kind="text"
+            label={field.label}
+            value={agent[field.key]}
+            maxLength={field.maxLength}
+            password={field.password}
+            onChange={(value) => onChange({ [field.key]: value })}
+          />
+        ))}
+        <Field kind="number" label="Context Window" value={agent.context_window} min={0}
           onChange={(context_window) => onChange({ context_window })}
+        />
+        <Field kind="toggle" label="Use Responses API" value={agent.use_responses}
+          onChange={(use_responses) => onChange({ use_responses })}
         />
         <label className="field full">
           <span>Description</span>
@@ -307,63 +343,29 @@ function AgentConfigEditor({
   );
 }
 
-function TextField({
-  label,
-  value,
-  maxLength,
-  password = false,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  maxLength?: number;
-  password?: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <Input type={password ? "password" : "text"} value={value} maxLength={maxLength} onChange={onChange} />
-    </label>
-  );
-}
+type FieldProps =
+  | { kind: "text"; label: string; value: string; maxLength?: number; password?: boolean; onChange: (value: string) => void }
+  | { kind: "number"; label: string; value: number; min?: number; max?: number; step?: number; onChange: (value: number) => void }
+  | { kind: "toggle"; label: string; value: boolean; onChange: (value: boolean) => void };
 
-function NumberField({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  onChange: (value: number) => void;
-}) {
+function Field(props: FieldProps) {
+  const className = props.kind === "toggle" ? "field switch-field" : "field";
   return (
-    <label className="field">
-      <span>{label}</span>
-      <InputNumber value={value} min={min} max={max} step={step} onChange={(next) => typeof next === "number" && onChange(next)} />
-    </label>
-  );
-}
-
-function ToggleField({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="field switch-field">
-      <span>{label}</span>
-      <Switch checked={checked} onChange={onChange} aria-label={label} />
+    <label className={className}>
+      <span>{props.label}</span>
+      {props.kind === "text" ? (
+        <Input type={props.password ? "password" : "text"} value={props.value} maxLength={props.maxLength} onChange={props.onChange} />
+      ) : props.kind === "number" ? (
+        <InputNumber
+          value={props.value}
+          min={props.min}
+          max={props.max}
+          step={props.step}
+          onChange={(next) => typeof next === "number" && props.onChange(next)}
+        />
+      ) : (
+        <Switch checked={props.value} onChange={props.onChange} aria-label={props.label} />
+      )}
     </label>
   );
 }

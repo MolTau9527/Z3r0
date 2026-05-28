@@ -1,6 +1,6 @@
 import { Button, Tooltip } from "@douyinfe/semi-ui";
 import { Activity, FolderOpen, Monitor, Plus, SquareTerminal } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAdminHeaderActions } from "../../app/layouts/AdminLayout";
 import { showApiError } from "../../shared/api/feedback";
@@ -36,9 +36,9 @@ export function PlaygroundPage() {
   const setHeaderActions = useAdminHeaderActions();
   const {
     activeSessionId, selectSession,
-    chatState, status, historyLoading,
+    chatState, status, historyLoading, historyHasMore, historyPrepending, historyVersion,
     agents, defaultAgentCode, activeAgentCode, setActiveAgentCode,
-    send, interrupt, cancelAll,
+    send, interrupt, cancelAll, loadPreviousHistory,
   } = useAgentSessionContext();
   const location = useLocation();
   const navigate = useNavigate();
@@ -138,7 +138,7 @@ export function PlaygroundPage() {
     </>
   ), [openSelectedFileManager, openSelectedNoVNC, openSelectedShell, sandboxContainerId, sandboxContainers, sandboxLoading, screenUnavailableReason, selectSession, selectedSandboxName, shellUnavailableReason, status]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setHeaderActions(headerNode);
     return () => setHeaderActions(null);
   }, [headerNode, setHeaderActions]);
@@ -161,9 +161,11 @@ export function PlaygroundPage() {
               className="playground-canvas-shell"
               contentClassName="playground-canvas"
               loading={historyLoading}
+              loadingPrevious={historyPrepending}
+              onLoadPrevious={historyHasMore && !historyPrepending ? () => void loadPreviousHistory() : undefined}
+              preserveScrollKey={historyVersion}
               resetKey={activeSessionId ?? "new-chat"}
               scrollButtonClassName="chat-scroll-tail-floating"
-              spinClassName="playground-spin"
               watch={[chatState.nodes, chatState.streaming]}
             >
               {(tailRef) => (

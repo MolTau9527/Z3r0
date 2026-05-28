@@ -11,10 +11,6 @@ FRONTEND_CONTRACT_CONSTANTS_PATH = ROOT_PATH / "web" / "src" / "shared" / "api" 
 if str(ROOT_PATH) not in sys.path:
     sys.path.insert(0, str(ROOT_PATH))
 
-from utils.litellm_config import configure_litellm_environment
-
-configure_litellm_environment()
-
 
 def export_openapi_schema() -> Path:
     from app import create_app
@@ -168,6 +164,14 @@ def _register_extra_schemas(schema: dict[str, Any]) -> None:
         DoneEvent,
         RunStateEvent,
     )
+    from schema.agent.subordinates import AgentSubordinateTaskToolItem, AgentSubordinateTaskToolResult
+    from schema.common.tool_results import ToolResultSchema
+    from schema.sandbox.command_outputs import (
+        SandboxAsyncJobListToolResult,
+        SandboxAsyncJobToolResult,
+        SandboxCommandOutputChunk,
+        SandboxCommandResultMetadata,
+    )
 
     components = schema.setdefault("components", {})
     schemas = components.setdefault("schemas", {})
@@ -180,6 +184,13 @@ def _register_extra_schemas(schema: dict[str, Any]) -> None:
         "AgentStreamInterruptCommand": AgentStreamInterruptCommand,
         "AgentStreamCancelAllCommand": AgentStreamCancelAllCommand,
         "AgentStreamCommandSchema": AgentStreamCommandSchema,
+        "AgentSubordinateTaskToolItem": AgentSubordinateTaskToolItem,
+        "AgentSubordinateTaskToolResult": AgentSubordinateTaskToolResult,
+        "ToolResultSchema": ToolResultSchema,
+        "SandboxAsyncJobToolResult": SandboxAsyncJobToolResult,
+        "SandboxAsyncJobListToolResult": SandboxAsyncJobListToolResult,
+        "SandboxCommandResultMetadata": SandboxCommandResultMetadata,
+        "SandboxCommandOutputChunk": SandboxCommandOutputChunk,
     }
     for name, model in extras.items():
         body = TypeAdapter(model).json_schema(ref_template="#/components/schemas/{model}")

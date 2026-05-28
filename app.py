@@ -9,9 +9,6 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from config import ROOT_PATH, get_config
-from utils.litellm_config import configure_litellm_environment
-
-configure_litellm_environment()
 
 from core.delegation.subagents import start_subagent_runtime, stop_subagent_runtime
 from core.runtime.session import get_agent_pool

@@ -30,10 +30,12 @@ import {
   disconnectChatTurn,
   finishChatTurn,
   initialChatState,
+  prependChatHistory,
   streamReduce,
   type ChatState,
-} from "./playgroundReducer";
+} from "./chatState";
 import { bufferLiveEvent, waitOpen } from "./agentStream";
+import { filterOverlappingEvents } from "./eventKeys";
 
 type ConnectionStatus = "idle" | "connecting" | "open" | "closed";
 
@@ -41,6 +43,10 @@ type SessionRuntime = {
   state: ChatState;
   status: ConnectionStatus;
   historyLoading: boolean;
+  historyPrepending: boolean;
+  historyHasMore: boolean;
+  historyBeforeId: number | null;
+  historyVersion: number;
   // user-overridden agent for this session; "" => fall back to server-side sticky
   agentCodeOverride: string;
 };
@@ -49,19 +55,25 @@ const DEFAULT_RUNTIME: SessionRuntime = {
   state: initialChatState,
   status: "idle",
   historyLoading: false,
+  historyPrepending: false,
+  historyHasMore: false,
+  historyBeforeId: null,
+  historyVersion: 0,
   agentCodeOverride: "",
 };
 
 const IDLE_CLOSE_MS = 5 * 60 * 1000;
+const DELETED_SESSION_TOMBSTONE_MS = 30 * 1000;
+const HISTORY_PAGE_SIZE = 80;
+const LIVE_FLUSH_INTERVAL_MS = 33;
 
 type AgentSessionContextValue = {
   sessions: AgentSessionSummary[];
   sessionsLoading: boolean;
   refreshSessions: () => Promise<void>;
+  syncSessions: (items: AgentSessionSummary[]) => void;
   deleteSession: (sessionId: string) => Promise<void>;
   dropSessionRuntime: (sessionId: string) => void;
-  ensureSessionRuntime: (sessionId: string) => void;
-  getSessionRuntime: (sessionId: string | null) => Pick<SessionRuntime, "state" | "status" | "historyLoading">;
 
   activeSessionId: string | null;
   selectSession: (sessionId: string | null, options?: { navigateBlank?: boolean }) => void;
@@ -69,17 +81,20 @@ type AgentSessionContextValue = {
   chatState: ChatState;
   status: ConnectionStatus;
   historyLoading: boolean;
+  historyPrepending: boolean;
+  historyHasMore: boolean;
+  historyVersion: number;
 
   agents: AgentInfo[];
   defaultAgentCode: string;
   activeAgentCode: string;
   setActiveAgentCode: (code: string) => void;
   getSessionAgentCode: (sessionId: string | null) => string;
-  setSessionAgentCode: (sessionId: string, code: string) => void;
 
   send: (content: AgentInputPart[], sandboxContainerId?: number | null, sessionId?: string | null) => Promise<void>;
   interrupt: (sessionId?: string | null) => Promise<void>;
   cancelAll: (sessionId?: string | null) => Promise<void>;
+  loadPreviousHistory: (sessionId?: string | null) => Promise<void>;
 };
 
 const AgentSessionContext = createContext<AgentSessionContextValue | null>(null);
@@ -92,6 +107,7 @@ export function useAgentSessionContext(): AgentSessionContextValue {
 
 export function AgentSessionProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<AgentSessionSummary[]>([]);
+  const [knownSessions, setKnownSessions] = useState<Map<string, AgentSessionSummary>>(() => new Map());
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [runtimes, setRuntimes] = useState<Map<string, SessionRuntime>>(() => new Map());
@@ -107,7 +123,10 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
   const ensuredRef = useRef<Set<string>>(new Set());
   const historyReadyRef = useRef<Set<string>>(new Set());
   const loadingHistoryRef = useRef<Set<string>>(new Set());
+  const deletedSessionsRef = useRef<Set<string>>(new Set());
   const pendingLiveEventsRef = useRef<Map<string, AgentStreamEvent[]>>(new Map());
+  const liveFlushTimersRef = useRef<Map<string, number>>(new Map());
+  const liveFrameEventsRef = useRef<Map<string, AgentStreamEvent[]>>(new Map());
   const pendingSendRef = useRef<{
     sessionId: string;
     content: AgentInputPart[];
@@ -115,6 +134,12 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
     agentCode: string;
   } | null>(null);
   const manualBlankSessionRef = useRef(false);
+
+  const clearDeletedMarkerLater = useCallback((sessionId: string) => {
+    window.setTimeout(() => {
+      deletedSessionsRef.current.delete(sessionId);
+    }, DELETED_SESSION_TOMBSTONE_MS);
+  }, []);
 
   // ---------------------------------------------------------------- helpers
   const initRuntime = useCallback((sessionId: string) => {
@@ -128,16 +153,21 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
 
   const updateRuntime = useCallback((sessionId: string, fn: (r: SessionRuntime) => SessionRuntime) => {
     setRuntimes((prev) => {
-      const current = prev.get(sessionId);
-      if (!current) return prev;
+      const current = prev.get(sessionId) ?? DEFAULT_RUNTIME;
       const next = new Map(prev);
       next.set(sessionId, fn(current));
       return next;
     });
   }, []);
 
-  const dropRuntime = useCallback((sessionId: string) => {
+  const dropRuntime = useCallback((sessionId: string, options: { keepDeletedMarker?: boolean } = {}) => {
     setRuntimes((prev) => {
+      if (!prev.has(sessionId)) return prev;
+      const next = new Map(prev);
+      next.delete(sessionId);
+      return next;
+    });
+    setKnownSessions((prev) => {
       if (!prev.has(sessionId)) return prev;
       const next = new Map(prev);
       next.delete(sessionId);
@@ -146,7 +176,23 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
     ensuredRef.current.delete(sessionId);
     historyReadyRef.current.delete(sessionId);
     loadingHistoryRef.current.delete(sessionId);
+    if (!options.keepDeletedMarker) deletedSessionsRef.current.delete(sessionId);
     pendingLiveEventsRef.current.delete(sessionId);
+    liveFrameEventsRef.current.delete(sessionId);
+    const timer = liveFlushTimersRef.current.get(sessionId);
+    if (timer != null) {
+      window.clearTimeout(timer);
+      liveFlushTimersRef.current.delete(sessionId);
+    }
+  }, []);
+
+  const syncSessions = useCallback((items: AgentSessionSummary[]) => {
+    if (!items.length) return;
+    setKnownSessions((prev) => {
+      const next = new Map(prev);
+      for (const session of items) next.set(session.session_id, session);
+      return next;
+    });
   }, []);
 
   // ------------------------------------------------------------- agents
@@ -166,15 +212,13 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
       const response = await listAgentSessions();
       const items = response.data?.items ?? [];
       setSessions(items);
-      for (const session of items) {
-        if (session.is_running) initRuntime(session.session_id);
-      }
+      syncSessions(items);
     } catch (error) {
       if (!silent) showApiError(error);
     } finally {
       if (!silent) setSessionsLoading(false);
     }
-  }, [initRuntime]);
+  }, [syncSessions]);
 
   const refreshSessionsRef = useRef(refreshSessions);
   refreshSessionsRef.current = refreshSessions;
@@ -217,33 +261,39 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
     idleTimersRef.current.set(sessionId, timer);
   }, [clearIdleTimer, closeSocket]);
 
-  const applyStreamEvent = useCallback((sessionId: string, parsed: AgentStreamEvent) => {
-    if (parsed.type === "done") {
-      updateRuntime(sessionId, (r) => ({
-        ...r,
-        state: finishChatTurn(r.state),
-      }));
-      return;
+  const flushLiveEvents = useCallback((sessionId: string) => {
+    liveFlushTimersRef.current.delete(sessionId);
+    const events = liveFrameEventsRef.current.get(sessionId);
+    if (!events?.length) return;
+    liveFrameEventsRef.current.delete(sessionId);
+    if (deletedSessionsRef.current.has(sessionId)) return;
+
+    const bufferedIdle = events.some((event) => event.type === "run_state" && !event.running);
+
+    updateRuntime(sessionId, (r) => ({
+      ...r,
+      state: events.reduce(streamReduce, r.state),
+    }));
+
+    if (events.some((event) => event.type === "user_message")) {
+      void refreshSessionsRef.current(true);
     }
-    if (parsed.type === "run_state" && !parsed.running) {
-      updateRuntime(sessionId, (r) => ({
-        ...r,
-        state: streamReduce(r.state, parsed),
-      }));
+    if (bufferedIdle) {
       pendingLiveEventsRef.current.delete(sessionId);
       reloadHistoryRef.current(sessionId, true);
       void refreshSessionsRef.current(true);
-      return;
     }
-    // user_message echo signals the backend has materialized the session
-    if (parsed.type === "user_message") {
-      void refreshSessionsRef.current(true);
-    }
-    updateRuntime(sessionId, (r) => ({
-      ...r,
-      state: streamReduce(r.state, parsed),
-    }));
   }, [updateRuntime]);
+
+  const enqueueStreamEvent = useCallback((sessionId: string, event: AgentStreamEvent) => {
+    const events = liveFrameEventsRef.current.get(sessionId);
+    if (events) events.push(event);
+    else liveFrameEventsRef.current.set(sessionId, [event]);
+
+    if (liveFlushTimersRef.current.has(sessionId)) return;
+    const timer = window.setTimeout(() => flushLiveEvents(sessionId), LIVE_FLUSH_INTERVAL_MS);
+    liveFlushTimersRef.current.set(sessionId, timer);
+  }, [flushLiveEvents]);
 
   const connectFor = useCallback((sessionId: string): WebSocket => {
     const existing = socketsRef.current.get(sessionId);
@@ -263,9 +313,6 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
       if (socketsRef.current.get(sessionId) !== socket) return;
       updateRuntime(sessionId, (r) => ({ ...r, status: "open" }));
       markActivity(sessionId);
-      if (!ensuredRef.current.has(sessionId) && !loadingHistoryRef.current.has(sessionId)) {
-        reloadHistoryRef.current(sessionId);
-      }
     });
 
     const onTerminate = (event: CloseEvent | Event) => {
@@ -274,6 +321,7 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
       clearIdleTimer(sessionId);
       socket.removeEventListener("close", onTerminate);
       socket.removeEventListener("error", onTerminate);
+      if (deletedSessionsRef.current.has(sessionId)) return;
       updateRuntime(sessionId, (r) => ({
         ...r,
         status: "closed",
@@ -298,17 +346,18 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
       markActivity(sessionId);
       try {
         const parsed = JSON.parse(event.data) as AgentStreamEvent;
+        if (deletedSessionsRef.current.has(sessionId)) return;
         if (!historyReadyRef.current.has(sessionId) || loadingHistoryRef.current.has(sessionId)) {
           bufferLiveEvent(sessionId, parsed, pendingLiveEventsRef.current);
           return;
         }
-        applyStreamEvent(sessionId, parsed);
+        enqueueStreamEvent(sessionId, parsed);
       } catch {
         // backend only emits json frames; swallow malformed payloads defensively
       }
     });
     return socket;
-  }, [applyStreamEvent, clearIdleTimer, initRuntime, markActivity, updateRuntime]);
+  }, [clearIdleTimer, enqueueStreamEvent, initRuntime, markActivity, updateRuntime]);
 
   const sendCommand = useCallback(async (sessionId: string, command: AgentStreamCommand) => {
     const socket = connectFor(sessionId);
@@ -321,21 +370,26 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
 
   // ---------------------------------------------------------- history load
   const loadHistory = useCallback((sessionId: string, markEnsured: boolean, forceReplace = false) => {
+    if (deletedSessionsRef.current.has(sessionId)) return;
     if (!forceReplace && loadingHistoryRef.current.has(sessionId)) {
       return;
     }
     initRuntime(sessionId);
     loadingHistoryRef.current.add(sessionId);
+    historyReadyRef.current.delete(sessionId);
+    connectForRef.current(sessionId);
     if (forceReplace) {
-      historyReadyRef.current.delete(sessionId);
       pendingLiveEventsRef.current.delete(sessionId);
     }
     updateRuntime(sessionId, (r) => ({ ...r, historyLoading: true }));
 
-    listAgentEvents(sessionId)
+    listAgentEvents(sessionId, { limit: HISTORY_PAGE_SIZE })
       .then((response) => {
+        if (deletedSessionsRef.current.has(sessionId)) return;
         const events = response.data?.items ?? [];
+        const data = response.data;
         const buffered = pendingLiveEventsRef.current.get(sessionId) ?? [];
+        const bufferedEvents = filterOverlappingEvents(events, buffered);
         const bufferedIdle = buffered.some((event) => event.type === "run_state" && !event.running);
         pendingLiveEventsRef.current.delete(sessionId);
         if (markEnsured) ensuredRef.current.add(sessionId);
@@ -343,10 +397,12 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
         loadingHistoryRef.current.delete(sessionId);
         updateRuntime(sessionId, (r) => ({
           ...r,
-          state: buffered.reduce(streamReduce, chatReplay(events)),
+          state: bufferedEvents.reduce(streamReduce, chatReplay(events)),
           historyLoading: false,
+          historyHasMore: Boolean(data?.has_more),
+          historyBeforeId: data?.next_before_id ?? null,
+          historyVersion: r.historyVersion + 1,
         }));
-        connectForRef.current(sessionId);
         if (bufferedIdle && !forceReplace) {
           reloadHistoryRef.current(sessionId, true);
           void refreshSessionsRef.current(true);
@@ -357,6 +413,7 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
         historyReadyRef.current.delete(sessionId);
         loadingHistoryRef.current.delete(sessionId);
         pendingLiveEventsRef.current.delete(sessionId);
+        if (deletedSessionsRef.current.has(sessionId)) return;
         showApiError(error);
         updateRuntime(sessionId, (r) => ({ ...r, historyLoading: false }));
       });
@@ -367,17 +424,39 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
     loadHistory(sessionId, true);
   }, [loadHistory]);
 
-  const ensureSessionRuntime = useCallback((sessionId: string) => {
-    if (ensuredRef.current.has(sessionId)) {
-      connectFor(sessionId);
-      return;
-    }
-    ensureHistoryLoaded(sessionId);
-  }, [connectFor, ensureHistoryLoaded]);
-
   const reloadHistory = useCallback((sessionId: string, forceReplace = false) => {
     loadHistory(sessionId, false, forceReplace);
   }, [loadHistory]);
+
+  const runtimesRef = useRef(runtimes);
+  runtimesRef.current = runtimes;
+
+  const loadPreviousHistory = useCallback(async (sessionId: string | null = activeSessionId) => {
+    const targetSessionId = sessionId ?? activeSessionId;
+    if (!targetSessionId || deletedSessionsRef.current.has(targetSessionId)) return;
+    const runtime = runtimesRef.current.get(targetSessionId);
+    if (!runtime?.historyHasMore || !runtime.historyBeforeId || runtime.historyPrepending) return;
+    updateRuntime(targetSessionId, (r) => ({ ...r, historyPrepending: true }));
+    try {
+      const response = await listAgentEvents(targetSessionId, {
+        beforeId: runtime.historyBeforeId,
+        limit: HISTORY_PAGE_SIZE,
+      });
+      if (deletedSessionsRef.current.has(targetSessionId)) return;
+      const data = response.data;
+      updateRuntime(targetSessionId, (r) => ({
+        ...r,
+        state: prependChatHistory(r.state, data?.items ?? []),
+        historyPrepending: false,
+        historyHasMore: Boolean(data?.has_more),
+        historyBeforeId: data?.next_before_id ?? null,
+        historyVersion: r.historyVersion + 1,
+      }));
+    } catch (error) {
+      if (!deletedSessionsRef.current.has(targetSessionId)) showApiError(error);
+      updateRuntime(targetSessionId, (r) => ({ ...r, historyPrepending: false }));
+    }
+  }, [activeSessionId, updateRuntime]);
 
   const reloadHistoryRef = useRef(reloadHistory);
   reloadHistoryRef.current = reloadHistory;
@@ -391,9 +470,12 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
     if (!sessionId || pendingSendRef.current?.sessionId !== sessionId) {
       pendingSendRef.current = null;
     }
+    if (sessionId) {
+      initRuntime(sessionId);
+    }
     manualBlankSessionRef.current = sessionId === null && options.navigateBlank !== false;
     setActiveSessionId(sessionId);
-  }, []);
+  }, [initRuntime]);
 
   useEffect(() => {
     if (!activeSessionId) return;
@@ -405,7 +487,7 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
   }, [activeSessionId, connectFor, ensureHistoryLoaded]);
 
   useEffect(() => {
-    const runningSessions = sessions.filter((session) => session.is_running);
+    const runningSessions = Array.from(knownSessions.values()).filter((session) => session.is_running);
     if (!runningSessions.length) return;
 
     if (!activeSessionId && !manualBlankSessionRef.current) {
@@ -420,15 +502,15 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
       }
       ensureHistoryLoaded(session.session_id);
     }
-  }, [activeSessionId, connectFor, ensureHistoryLoaded, sessions]);
+  }, [activeSessionId, connectFor, ensureHistoryLoaded, knownSessions]);
 
   // ------------------------------------------------------------- agentCode
   const sessionAgentCode = useCallback(
     (sessionId: string | null): string => {
       if (!sessionId) return "";
-      return sessions.find((session) => session.session_id === sessionId)?.agent_code ?? "";
+      return knownSessions.get(sessionId)?.agent_code ?? "";
     },
-    [sessions],
+    [knownSessions],
   );
 
   const activeAgentCode = useMemo(() => {
@@ -457,12 +539,6 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
     return sessionAgentCode(sessionId) || defaultAgentCode;
   }, [defaultAgentCode, pendingAgentCode, runtimes, sessionAgentCode]);
 
-  const setSessionAgentCode = useCallback((sessionId: string, code: string) => {
-    if (!agents.some((agent) => agent.code === code)) return;
-    initRuntime(sessionId);
-    updateRuntime(sessionId, (r) => ({ ...r, agentCodeOverride: code }));
-  }, [agents, initRuntime, updateRuntime]);
-
   // ------------------------------------------------------------- commands
   // drain a queued send once the lazy-created session has loaded its history
   useEffect(() => {
@@ -478,7 +554,7 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
       sandbox_container_id: queued.sandboxContainerId,
       agent_code: queued.agentCode || null,
     }).catch(showApiError);
-  }, [activeSessionId, runtimes, sendCommand, updateRuntime]);
+  }, [activeSessionId, runtimes, sendCommand]);
 
   const send = useCallback(async (content: AgentInputPart[], sandboxContainerId: number | null = null, sessionId: string | null = activeSessionId) => {
     const agentCode = getSessionAgentCode(sessionId);
@@ -526,61 +602,63 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
   }, [activeSessionId, sendCommand]);
 
   const deleteSession = useCallback(async (sessionId: string) => {
+    deletedSessionsRef.current.add(sessionId);
+    closeSocket(sessionId);
+    dropRuntime(sessionId, { keepDeletedMarker: true });
+    if (activeSessionId === sessionId) selectSession(null);
     try {
       const response = await deleteAgentSession(sessionId);
       showApiSuccess(response);
-      closeSocket(sessionId);
-      dropRuntime(sessionId);
-      if (activeSessionId === sessionId) selectSession(null);
       await refreshSessions();
+      clearDeletedMarkerLater(sessionId);
     } catch (error) {
+      deletedSessionsRef.current.delete(sessionId);
       showApiError(error);
+      await refreshSessions();
     }
-  }, [activeSessionId, closeSocket, dropRuntime, refreshSessions, selectSession]);
+  }, [activeSessionId, clearDeletedMarkerLater, closeSocket, dropRuntime, refreshSessions, selectSession]);
 
   // -------------------------------------------------------------- unmount
   useEffect(() => {
     return () => {
       for (const socket of socketsRef.current.values()) socket.close();
       for (const timer of idleTimersRef.current.values()) window.clearTimeout(timer);
+      for (const timer of liveFlushTimersRef.current.values()) window.clearTimeout(timer);
       socketsRef.current.clear();
       idleTimersRef.current.clear();
+      liveFlushTimersRef.current.clear();
       ensuredRef.current.clear();
       historyReadyRef.current.clear();
       loadingHistoryRef.current.clear();
+      deletedSessionsRef.current.clear();
       pendingLiveEventsRef.current.clear();
+      liveFrameEventsRef.current.clear();
     };
   }, []);
 
   // -------------------------------------------------------------- derived
   const activeRuntime = activeSessionId ? runtimes.get(activeSessionId) ?? DEFAULT_RUNTIME : DEFAULT_RUNTIME;
-  const getSessionRuntime = useCallback((sessionId: string | null) => {
-    const runtime = sessionId ? runtimes.get(sessionId) ?? DEFAULT_RUNTIME : DEFAULT_RUNTIME;
-    return {
-      state: runtime.state,
-      status: runtime.status,
-      historyLoading: runtime.historyLoading,
-    };
-  }, [runtimes]);
-
   const value = useMemo<AgentSessionContextValue>(() => ({
-    sessions, sessionsLoading, refreshSessions, deleteSession,
-    dropSessionRuntime, ensureSessionRuntime, getSessionRuntime,
+    sessions, sessionsLoading, refreshSessions, syncSessions, deleteSession,
+    dropSessionRuntime,
     activeSessionId, selectSession,
     chatState: activeRuntime.state,
     status: activeRuntime.status,
     historyLoading: activeRuntime.historyLoading,
+    historyPrepending: activeRuntime.historyPrepending,
+    historyHasMore: activeRuntime.historyHasMore,
+    historyVersion: activeRuntime.historyVersion,
     agents, defaultAgentCode, activeAgentCode, setActiveAgentCode,
-    getSessionAgentCode, setSessionAgentCode,
-    send, interrupt, cancelAll,
+    getSessionAgentCode,
+    send, interrupt, cancelAll, loadPreviousHistory,
   }), [
-    sessions, sessionsLoading, refreshSessions, deleteSession,
-    dropSessionRuntime, ensureSessionRuntime, getSessionRuntime,
+    sessions, sessionsLoading, refreshSessions, syncSessions, deleteSession,
+    dropSessionRuntime,
     activeSessionId, selectSession,
     activeRuntime,
     agents, defaultAgentCode, activeAgentCode, setActiveAgentCode,
-    getSessionAgentCode, setSessionAgentCode,
-    send, interrupt, cancelAll,
+    getSessionAgentCode,
+    send, interrupt, cancelAll, loadPreviousHistory,
   ]);
 
   return <AgentSessionContext.Provider value={value}>{children}</AgentSessionContext.Provider>;

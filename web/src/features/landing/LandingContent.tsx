@@ -12,7 +12,6 @@ import {
   FileSearch,
   Fingerprint,
   GitBranch,
-  Github,
   Layers3,
   LockKeyhole,
   MessageSquareCode,
@@ -149,7 +148,7 @@ const architectureNodes: ArchitectureNode[] = [
     id: "model",
     label: "Model Providers",
     role: "Model Layer",
-    detail: "Model access stays behind role and runtime boundaries with support for LiteLLM and OpenAI-compatible providers.",
+    detail: "Model access stays behind role and runtime boundaries with configurable native OpenAI-compatible provider modes.",
     points: [
       "Allows model routing to be configured outside frontend code.",
       "Keeps provider details behind agent and runtime interfaces.",
@@ -300,7 +299,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
               <span>View architecture</span>
             </a>
             <a className="landing-action-link landing-action-secondary" href={repositoryUrl} target="_blank" rel="noopener noreferrer">
-              <Github size={17} />
+              <GitBranch size={17} />
               <span>Follow us</span>
             </a>
           </div>

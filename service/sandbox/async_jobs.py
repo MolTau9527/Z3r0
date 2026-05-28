@@ -13,14 +13,13 @@ from schema.sandbox.async_jobs import SandboxAsyncJobSnapshot, SandboxAsyncJobSt
 
 logger = get_logger(__name__)
 
-_job_waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
-_job_waiters_lock = asyncio.Lock()
-
 TERMINAL_ASYNC_JOB_STATUSES = {
     SandboxAsyncJobStatus.COMPLETED,
     SandboxAsyncJobStatus.FAILED,
     SandboxAsyncJobStatus.CANCELED,
 }
+_job_waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
+_job_waiters_lock = asyncio.Lock()
 
 
 async def create_async_job(
@@ -71,6 +70,68 @@ async def get_async_job(run_id: str, *, session_id: str) -> SandboxAsyncJobSnaps
         return snapshot_from_job(job)
 
 
+async def wait_async_job(
+    run_id: str,
+    *,
+    session_id: str,
+    timeout_seconds: int,
+) -> SandboxAsyncJobSnapshot | None:
+    snapshot = await get_async_job(run_id, session_id=session_id)
+    if snapshot is None or snapshot.status in TERMINAL_ASYNC_JOB_STATUSES or timeout_seconds <= 0:
+        return snapshot
+    waiter = await _get_job_waiter(run_id)
+    snapshot = await get_async_job(run_id, session_id=session_id)
+    if snapshot is None or snapshot.status in TERMINAL_ASYNC_JOB_STATUSES:
+        await _forget_job_waiter(run_id, waiter)
+        return snapshot
+    try:
+        await asyncio.wait_for(waiter.wait(), timeout=timeout_seconds)
+    except TimeoutError:
+        await _forget_job_waiter(run_id, waiter)
+    return await get_async_job(run_id, session_id=session_id)
+
+
+async def mark_async_job_result_delivered(
+    run_id: str,
+    *,
+    session_id: str,
+) -> SandboxAsyncJobSnapshot | None:
+    return await _claim_async_job_result_delivery(run_id, session_id=session_id, return_existing=True)
+
+
+async def claim_async_job_result_for_notification(snapshot: SandboxAsyncJobSnapshot) -> SandboxAsyncJobSnapshot | None:
+    return await _claim_async_job_result_delivery(snapshot.run_id, session_id=snapshot.session_id, return_existing=False)
+
+
+async def _claim_async_job_result_delivery(
+    run_id: str,
+    *,
+    session_id: str,
+    return_existing: bool,
+) -> SandboxAsyncJobSnapshot | None:
+    now = datetime.now()
+    async with get_async_session() as session:
+        updated = await session.exec(
+            update(SandboxAsyncJob)
+            .where(
+                SandboxAsyncJob.run_id == run_id,
+                SandboxAsyncJob.session_id == session_id,
+                SandboxAsyncJob.status.in_([status.value for status in TERMINAL_ASYNC_JOB_STATUSES]),
+                SandboxAsyncJob.result_delivered_at.is_(None),
+            )
+            .values(result_delivered_at=now, updated_at=now)
+        )
+        if updated.rowcount != 1:
+            await session.rollback()
+            if not return_existing:
+                return None
+            current = await session.get(SandboxAsyncJob, run_id)
+            return snapshot_from_job(current) if current is not None and current.session_id == session_id else None
+        await session.commit()
+        current = await session.get(SandboxAsyncJob, run_id)
+        return snapshot_from_job(current) if current is not None else None
+
+
 async def has_running_async_jobs(*, session_id: str) -> bool:
     async with get_async_session() as session:
         run_id = (await session.exec(
@@ -84,19 +145,35 @@ async def has_running_async_jobs(*, session_id: str) -> bool:
         return run_id is not None
 
 
-async def wait_async_job_terminal(run_id: str, *, session_id: str) -> SandboxAsyncJobSnapshot | None:
-    snapshot = await get_async_job(run_id, session_id=session_id)
-    if snapshot is None or snapshot.status in TERMINAL_ASYNC_JOB_STATUSES:
-        return snapshot
+async def count_running_async_jobs_for_agent(*, session_id: str, agent_instance_id: str) -> int:
+    async with get_async_session() as session:
+        return len((await session.exec(
+            select(SandboxAsyncJob.run_id).where(
+                SandboxAsyncJob.session_id == session_id,
+                SandboxAsyncJob.agent_instance_id == agent_instance_id,
+                SandboxAsyncJob.status == SandboxAsyncJobStatus.RUNNING.value,
+            )
+        )).all())
 
-    waiter = await _get_job_waiter(run_id)
-    snapshot = await get_async_job(run_id, session_id=session_id)
-    if snapshot is None or snapshot.status in TERMINAL_ASYNC_JOB_STATUSES:
-        await _forget_job_waiter(run_id, waiter)
-        return snapshot
 
-    await waiter.wait()
-    return await get_async_job(run_id, session_id=session_id)
+async def list_async_jobs_for_agent(
+    *,
+    session_id: str,
+    agent_instance_id: str,
+    running_only: bool = False,
+    limit: int = 20,
+) -> list[SandboxAsyncJobSnapshot]:
+    async with get_async_session() as session:
+        statement = select(SandboxAsyncJob).where(
+            SandboxAsyncJob.session_id == session_id,
+            SandboxAsyncJob.agent_instance_id == agent_instance_id,
+        )
+        if running_only:
+            statement = statement.where(SandboxAsyncJob.status == SandboxAsyncJobStatus.RUNNING.value)
+        rows = (await session.exec(
+            statement.order_by(SandboxAsyncJob.created_at.desc()).limit(max(1, min(int(limit), 50)))
+        )).all()
+        return [snapshot_from_job(row) for row in rows]
 
 
 async def complete_async_job(
@@ -115,12 +192,36 @@ async def complete_async_job(
     )
 
 
-async def fail_async_job(run_id: str, error: str) -> SandboxAsyncJobSnapshot | None:
-    return await _finish_async_job(run_id, SandboxAsyncJobStatus.FAILED, error=error)
+async def fail_async_job(
+    run_id: str,
+    error: str,
+    *,
+    output_bytes: int = 0,
+    output_lines: int = 0,
+) -> SandboxAsyncJobSnapshot | None:
+    return await _finish_async_job(
+        run_id,
+        SandboxAsyncJobStatus.FAILED,
+        output_bytes=output_bytes,
+        output_lines=output_lines,
+        error=error,
+    )
 
 
-async def cancel_async_job(run_id: str, error: str = "") -> SandboxAsyncJobSnapshot | None:
-    return await _finish_async_job(run_id, SandboxAsyncJobStatus.CANCELED, error=error)
+async def cancel_async_job(
+    run_id: str,
+    error: str = "",
+    *,
+    output_bytes: int = 0,
+    output_lines: int = 0,
+) -> SandboxAsyncJobSnapshot | None:
+    return await _finish_async_job(
+        run_id,
+        SandboxAsyncJobStatus.CANCELED,
+        output_bytes=output_bytes,
+        output_lines=output_lines,
+        error=error,
+    )
 
 
 async def cancel_running_async_jobs_for_session(session_id: str, error: str = "") -> list[SandboxAsyncJobSnapshot]:
@@ -166,8 +267,6 @@ async def mark_stale_running_async_jobs_failed() -> list[SandboxAsyncJobSnapshot
                 await session.refresh(job)
             logger.info("stale sandbox async jobs marked failed: %d", len(rows))
         snapshots = [snapshot_from_job(job) for job in rows]
-    for snapshot in snapshots:
-        await _notify_job_finished(snapshot.run_id)
     return snapshots
 
 
@@ -193,6 +292,7 @@ def snapshot_from_job(job: SandboxAsyncJob) -> SandboxAsyncJobSnapshot:
         updated_at=job.updated_at,
         started_at=job.started_at,
         finished_at=job.finished_at,
+        result_delivered_at=job.result_delivered_at,
     )
 
 

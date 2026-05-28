@@ -15,15 +15,17 @@ from schema.work_project.projects import (
     WorkProjectAgentSummarySchema,
     WorkProjectTaskSchema,
 )
+from core.agent.constants import DEFAULT_AGENT_CODE as _CSO_AGENT_CODE
 from service.work_project.progress import calculate_work_project_progress, derive_work_project_status
-
-
-_CSO_AGENT_CODE = "cso"
 
 
 @function_tool
 async def load_work_project_metadata(ctx: RunContextWrapper[AgentRuntimeContext]) -> str:
-    """Load basic metadata for the current WorkProject."""
+    """Load metadata for the WorkProject bound to the current session.
+
+    Returns:
+        JSON status with project id, name, description, owner ids, sandbox id, status, type, and timestamps.
+    """
     project = await _current_project(ctx.context)
     if project is None:
         return _error("No WorkProject is bound to this session.")
@@ -32,7 +34,11 @@ async def load_work_project_metadata(ctx: RunContextWrapper[AgentRuntimeContext]
 
 @function_tool
 async def load_work_project_target_assets(ctx: RunContextWrapper[AgentRuntimeContext]) -> str:
-    """Load the raw target asset list for the current WorkProject."""
+    """Load the target asset text for the WorkProject bound to the current session.
+
+    Returns:
+        JSON status with project_id and the raw assets_text field.
+    """
     project = await _current_project(ctx.context)
     if project is None:
         return _error("No WorkProject is bound to this session.")
@@ -44,7 +50,11 @@ async def load_work_project_target_assets(ctx: RunContextWrapper[AgentRuntimeCon
 
 @function_tool
 async def load_work_project_tasks(ctx: RunContextWrapper[AgentRuntimeContext]) -> str:
-    """Load the current WorkProject task list and code-calculated overall project progress."""
+    """Load the shared task list for the WorkProject bound to the current session.
+
+    Returns:
+        JSON status with project_id, code-calculated overall progress, and shared task records.
+    """
     project = await _current_project(ctx.context)
     if project is None:
         return _error("No WorkProject is bound to this session.")
@@ -53,7 +63,11 @@ async def load_work_project_tasks(ctx: RunContextWrapper[AgentRuntimeContext]) -
 
 @function_tool
 async def load_work_project_agent_summaries(ctx: RunContextWrapper[AgentRuntimeContext]) -> str:
-    """Load all structured agent summaries for the current WorkProject."""
+    """Load all agent summary slots for the WorkProject bound to the current session.
+
+    Returns:
+        JSON status with project_id and structured summaries written by participating agents.
+    """
     project = await _current_project(ctx.context)
     if project is None:
         return _error("No WorkProject is bound to this session.")
@@ -69,15 +83,19 @@ async def update_work_project_agent_summary(
 
     Each agent can only write its own summary slot, keyed by agent_code.
     Call after meaningful discoveries, useful negative results, evidence, blockers,
-    decisions, handoffs, or progress changes, before the next command/subagent/wait/user reply when practical.
-    Do not wait until the task is done.
+    decisions, handoffs, or progress changes, before the next command, delegated task, handoff, or user reply when practical.
+    Keep the summary current throughout the task.
     Use task_id/task_title and progress (0-100, at most two decimals) to report this agent's current subtask progress.
 
     Args:
-        summary: Full replacement of this agent's current summary. Include task_id/task_title,
+        summary: WorkProjectAgentSummaryContentSchema full replacement for this agent's current summary.
+            Include task_id/task_title,
             progress, status, findings, decisions, blockers, next_steps, evidence, and notes as applicable.
             When task_id or exact task_title matches a shared task, that task's progress is synchronized.
             Overall project progress is recalculated by code and is not an input.
+
+    Returns:
+        JSON status with project_id and all current structured agent summaries.
     """
     agent_code = ctx.context.agent_code.strip()
     if not agent_code:
@@ -142,8 +160,12 @@ async def update_work_project_tasks(
     Do not provide or estimate overall project progress; it is recalculated by code from task progress.
 
     Args:
-        tasks: Complete desired task list after applying your changes. Preserve existing tasks that still matter,
+        tasks: list[WorkProjectTaskSchema] complete desired task list after applying your changes.
+            Preserve existing tasks that still matter,
             update status/progress/summary, and add or remove tasks only when the project plan changes.
+
+    Returns:
+        JSON status with project_id, recalculated overall progress, and the saved shared task list.
     """
     if ctx.context.agent_code != _CSO_AGENT_CODE:
         return _error("Only the cso agent can update the shared WorkProject task list.")
@@ -253,7 +275,7 @@ def _recalculate_project_progress(project: WorkProject) -> None:
 def _success(payload: object) -> str:
     return ToolResultSchema(
         status=ToolResultStatusSchema.SUCCESS,
-        type=ToolResultTypeSchema.KNOWLEDGE_DETAIL,
+        type=ToolResultTypeSchema.WORK_PROJECT,
         output=json.dumps(payload, ensure_ascii=False),
     ).model_dump_json()
 
@@ -261,6 +283,6 @@ def _success(payload: object) -> str:
 def _error(message: str) -> str:
     return ToolResultSchema(
         status=ToolResultStatusSchema.ERROR,
-        type=ToolResultTypeSchema.KNOWLEDGE_DETAIL,
+        type=ToolResultTypeSchema.WORK_PROJECT,
         output=message,
     ).model_dump_json()

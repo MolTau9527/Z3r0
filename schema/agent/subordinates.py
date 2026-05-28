@@ -30,7 +30,17 @@ class AgentSubordinateTaskSnapshot(BaseModel):
     finished_at: datetime | None = None
 
 
-class AgentSubordinateTaskToolResponse(BaseModel):
-    task: AgentSubordinateTaskSnapshot | None = None
-    tasks: list[AgentSubordinateTaskSnapshot] = Field(default_factory=list)
+class AgentSubordinateTaskToolItem(BaseModel):
+    run_id: str
+    agent_code: str
+    agent_name: str = ""
+    status: AgentSubordinateStatus
+    result: str = ""
+    error: str = ""
+    progress: str = ""
+
+
+class AgentSubordinateTaskToolResult(BaseModel):
+    task: AgentSubordinateTaskToolItem | None = None
+    tasks: list[AgentSubordinateTaskToolItem] = Field(default_factory=list)
     message: str = ""

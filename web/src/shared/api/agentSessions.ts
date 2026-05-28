@@ -18,9 +18,16 @@ export function createAgentSession() {
   return apiPost<CreateAgentSessionResponse>(AGENT_SESSIONS_PATH);
 }
 
-export function listAgentEvents(sessionId: string) {
+export function listAgentEvents(
+  sessionId: string,
+  options: { beforeId?: number | null; limit?: number } = {},
+) {
+  const params = new URLSearchParams();
+  if (options.beforeId) params.set("before_id", String(options.beforeId));
+  if (options.limit) params.set("limit", String(options.limit));
+  const query = params.toString();
   return apiGet<ListAgentEventsResponse>(
-    `${AGENT_SESSIONS_PATH}/${encodeURIComponent(sessionId)}/events`,
+    `${AGENT_SESSIONS_PATH}/${encodeURIComponent(sessionId)}/events${query ? `?${query}` : ""}`,
   );
 }
 

@@ -9,7 +9,6 @@ from schema.work_project.projects import (
     ListWorkProjectSessionsResponse,
     QueryWorkProjectsResponse,
     UpdateWorkProjectMetadataRequest,
-    WorkProjectSchema,
 )
 from service.work_project.projects import (
     cancel_work_project,

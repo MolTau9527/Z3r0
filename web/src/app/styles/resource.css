@@ -1,7 +1,6 @@
 .resource-page {
   display: grid;
   gap: 18px;
-  animation: contentFadeUp 260ms var(--ease-emphasized) both;
 }
 
 .metric-strip {
@@ -26,7 +25,6 @@
   display: grid;
   gap: 8px;
   padding: 18px;
-  animation: contentScaleIn 260ms var(--ease-emphasized) both;
 }
 
 .metric-card:hover,
@@ -53,7 +51,6 @@
 
 .table-panel {
   overflow-x: auto;
-  animation: contentFadeUp 300ms var(--ease-emphasized) both;
 }
 
 .table-toolbar {
@@ -100,7 +97,6 @@
   display: grid;
   gap: 18px;
   padding-bottom: 8px;
-  animation: contentFadeUp 220ms var(--ease-emphasized) both;
 }
 
 .resource-form label {
@@ -109,7 +105,6 @@
   color: inherit;
   font-size: 13px;
   font-weight: 650;
-  animation: rowFadeIn 220ms var(--ease-emphasized) both;
 }
 
 .resource-form label span {
@@ -177,10 +172,6 @@
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
-}
-
-.resource-table-row:not(.resource-table-head) {
-  animation: rowFadeIn 220ms var(--ease-emphasized) both;
 }
 
 .resource-table-row:not(.resource-table-head):hover {
@@ -261,7 +252,6 @@
 .system-config-page {
   display: grid;
   gap: 18px;
-  animation: contentFadeUp 260ms var(--ease-emphasized) both;
 }
 
 .system-config-spin {
@@ -393,7 +383,7 @@
 
 .agent-form-grid {
   display: grid;
-  grid-template-columns: minmax(120px, 0.7fr) minmax(180px, 1fr) minmax(160px, 0.9fr) minmax(180px, 1fr) 132px;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(180px, 1fr) minmax(160px, 0.9fr) minmax(180px, 1fr) 132px 136px;
   gap: 10px;
 }
 
@@ -522,7 +512,6 @@
   padding: 18px;
   border-bottom: 1px solid #edf2f7;
   background: #fbfdff;
-  animation: contentFadeUp 220ms var(--ease-emphasized) both;
 }
 
 .work-project-meta {
@@ -1147,7 +1136,6 @@
   min-height: 260px;
   display: grid;
   place-content: center;
-  animation: contentScaleIn 260ms var(--ease-emphasized) both;
 }
 
 .pager-row {

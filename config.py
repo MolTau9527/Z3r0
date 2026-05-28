@@ -55,6 +55,7 @@ class AgentConfig(StrictConfigModel):
     base_url: str = Field(default="")
     api_key: str = Field(default="")
     model: str = Field(default="")
+    use_responses: bool = Field(default=False)
     context_window: int = Field(default=1000000, ge=0)
 
 

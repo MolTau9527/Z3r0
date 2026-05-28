@@ -1,9 +1,11 @@
-import { AtSign, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useState, type RefObject, type WheelEvent } from "react";
+import { AtSign, Sparkles } from "lucide-react";
+import { useMemo, useState, type RefObject } from "react";
 import type { AgentImageInputPart, AgentInfo, AgentInputPart } from "../../shared/api/types";
 import { formatDateTime } from "../../shared/lib/date";
-import type { AgentTranscript, ChatNode } from "./playgroundReducer";
-import { emptyAgentTranscript, isTranscriptEmpty, TranscriptContent } from "./Transcript";
+import { ImagePreview, imageDataUrl, type ImagePreviewState } from "./ImagePreview";
+import type { AgentTranscript, ChatNode } from "./chatState";
+import { TranscriptContent } from "./Transcript";
+import { emptyAgentTranscript, isTranscriptEmpty } from "./transcriptView";
 import type { SubagentSelection } from "./subagentView";
 
 type ChatStreamProps = {
@@ -15,6 +17,10 @@ type ChatStreamProps = {
   onOpenSubagent: (selection: SubagentSelection) => void;
 };
 
+type RenderedChatNode =
+  | { kind: "user"; node: Extract<ChatNode, { kind: "user" }>; targetName: string }
+  | { kind: "agent"; node: Extract<ChatNode, { kind: "agent" }>; agentName: string; live: boolean };
+
 export function ChatStream({
   nodes,
   streaming,
@@ -23,39 +29,21 @@ export function ChatStream({
   tailRef,
   onOpenSubagent,
 }: ChatStreamProps) {
-  const [preview, setPreview] = useState<{ src: string; alt: string } | null>(null);
-  const [previewScale, setPreviewScale] = useState(1);
+  const [preview, setPreview] = useState<ImagePreviewState>(null);
   const agentNameByCode = useMemo(
     () => new Map(agents.map((a) => [a.code, a.name])),
     [agents],
   );
-
-  useEffect(() => {
-    if (!preview) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPreview(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [preview]);
+  const renderedNodes = useMemo(
+    () => buildRenderedChatNodes(nodes, streaming, agentNameByCode),
+    [agentNameByCode, nodes, streaming],
+  );
 
   const openImagePreview = (image: AgentImageInputPart, index: number) => {
     setPreview({
-      src: imageSrc(image),
+      src: imageDataUrl(image),
       alt: `User attachment ${index + 1}`,
     });
-    setPreviewScale(1);
-  };
-
-  const handlePreviewWheel = (event: WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const delta = event.deltaY > 0 ? -0.12 : 0.12;
-    setPreviewScale((scale) => Math.min(4, Math.max(0.3, Number((scale + delta).toFixed(2)))));
   };
 
   if (nodes.length === 0) {
@@ -76,33 +64,28 @@ export function ChatStream({
 
   const lastIndex = nodes.length - 1;
   const lastNode = nodes[lastIndex];
-  let lastTargetAgentName = "";
 
   return (
     <div className="chat-stream">
-      {nodes.map((node, index) => {
-        if (node.kind === "user") {
-          const targetName = resolveAgentName(agentNameByCode, node.targetAgentCode);
-          lastTargetAgentName = targetName;
+      {renderedNodes.map((item) => {
+        if (item.kind === "user") {
           return (
             <UserBubble
-              key={node.id}
-              content={node.content}
-              displayText={node.displayText}
-              targetName={targetName}
-              createdAt={node.createdAt}
+              key={item.node.id}
+              content={item.node.content}
+              displayText={item.node.displayText}
+              targetName={item.targetName}
+              createdAt={item.node.createdAt}
               onPreviewImage={openImagePreview}
             />
           );
         }
-        const isLive = streaming && index === lastIndex;
-        if (!isLive && isTranscriptEmpty(node)) return null;
         return (
           <AgentBlock
-            key={node.id}
-            agentName={node.agentName || lastTargetAgentName}
-            transcript={node}
-            live={isLive}
+            key={item.node.id}
+            agentName={item.agentName}
+            transcript={item.node}
+            live={item.live}
             selectedSubagent={selectedSubagent}
             onOpenSubagent={onOpenSubagent}
           />
@@ -119,38 +102,33 @@ export function ChatStream({
         />
       ) : null}
       <div ref={tailRef} className="chat-tail" />
-      {preview ? (
-        <div
-          className="image-preview-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Image preview"
-          onClick={() => setPreview(null)}
-          onWheel={handlePreviewWheel}
-        >
-          <button
-            type="button"
-            className="image-preview-close"
-            onClick={() => setPreview(null)}
-            aria-label="Close image preview"
-            title="Close"
-          >
-            <X size={20} />
-          </button>
-          <div className="image-preview-stage">
-            <img
-              className="image-preview-img"
-              src={preview.src}
-              alt={preview.alt}
-              draggable={false}
-              style={{ transform: `scale(${previewScale})` }}
-              onClick={(event) => event.stopPropagation()}
-            />
-          </div>
-        </div>
-      ) : null}
+      <ImagePreview preview={preview} onClose={() => setPreview(null)} />
     </div>
   );
+}
+
+function buildRenderedChatNodes(
+  nodes: ChatNode[],
+  streaming: boolean,
+  agentNameByCode: Map<string, string>,
+): RenderedChatNode[] {
+  const rendered: RenderedChatNode[] = [];
+  const lastIndex = nodes.length - 1;
+  let lastTargetName = "";
+
+  nodes.forEach((node, index) => {
+    if (node.kind === "user") {
+      lastTargetName = resolveAgentName(agentNameByCode, node.targetAgentCode);
+      rendered.push({ kind: "user", node, targetName: lastTargetName });
+      return;
+    }
+
+    const live = streaming && index === lastIndex;
+    if (!live && isTranscriptEmpty(node)) return;
+    rendered.push({ kind: "agent", node, agentName: node.agentName || lastTargetName, live });
+  });
+
+  return rendered;
 }
 
 function MessageTimestamp({ value }: { value: string }) {
@@ -204,7 +182,7 @@ function UserBubble({
                 >
                   <img
                     className="user-bubble-image"
-                    src={imageSrc(part)}
+                    src={imageDataUrl(part)}
                     alt="User attachment"
                   />
                 </button>
@@ -215,10 +193,6 @@ function UserBubble({
       </div>
     </div>
   );
-}
-
-function imageSrc(image: AgentImageInputPart): string {
-  return `data:${image.media_type};base64,${image.data}`;
 }
 
 function AgentBlock({

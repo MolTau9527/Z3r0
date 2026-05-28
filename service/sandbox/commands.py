@@ -13,6 +13,7 @@ from service.sandbox.docker_ops import (
     docker_status_to_sandbox_status,
     inspect_container_state_sync,
 )
+from service.sandbox import close_docker_response_sync as _close_response_sync
 from service.sandbox.status import save_sandbox_container_status
 from service.sandbox.types import SandboxContainerCommandResult
 
@@ -232,25 +233,6 @@ def _close_command_stream(stream: object) -> None:
         setattr(stream, "_response", None)
     except Exception:
         pass
-
-
-def _close_response_sync(socket: object, response: object | None) -> None:
-    if response is None:
-        response = getattr(socket, "_response", None)
-
-    close = getattr(response, "close", None)
-    if callable(close):
-        try:
-            close()
-        except Exception:
-            pass
-
-    if response is not None:
-        try:
-            if getattr(socket, "_response", None) is response:
-                setattr(socket, "_response", None)
-        except Exception:
-            pass
 
 
 def _split_command_output_chunk(chunk: object) -> tuple[bytes | str | None, bytes | str | None]:

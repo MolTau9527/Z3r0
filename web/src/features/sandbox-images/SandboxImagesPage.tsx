@@ -1,6 +1,6 @@
 import { Button, Popconfirm, Tag, Tooltip } from "@douyinfe/semi-ui";
 import { Ban, Boxes, Fingerprint, RotateCcw, Trash2 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cancelSandboxImage, createSandboxImage, deleteSandboxImage, querySandboxImages, retrySandboxImage } from "../../shared/api/sandboxImages";
 import type { CreateSandboxImageRequest, SandboxImage } from "../../shared/api/types";
 import { ResourcePageShell } from "../../shared/components/ResourcePageShell";
@@ -14,13 +14,11 @@ import { formatBytes } from "../../shared/lib/number";
 import { SANDBOX_IMAGE_STATUS_COLOR, SANDBOX_IMAGE_STATUS_LABEL } from "../../shared/lib/labels";
 import { SandboxImageFormModal } from "./SandboxImageFormModal";
 
-const DEFAULT_PAGE_SIZE = 10;
-
 export function SandboxImagesPage() {
   const {
     items: images, page, keyword, loading, loadItems: loadImages, total, rangeStart, rangeEnd,
     setKeyword, search, previous, next, canGoBack, canGoNext,
-  } = usePagedResourceList<SandboxImage>({ pageSize: DEFAULT_PAGE_SIZE, query: querySandboxImages });
+  } = usePagedResourceList<SandboxImage>({ query: querySandboxImages });
   const [modalOpen, setModalOpen] = useState(false);
 
   const { run: cancelImage, busyId: cancelingId } = useResourceAction<SandboxImage>(
@@ -33,14 +31,12 @@ export function SandboxImagesPage() {
     (image) => deleteSandboxImage(image.id), loadImages,
   );
 
-  const openCreateModal = useCallback(() => setModalOpen(true), []);
-  const refreshImages = useCallback(() => void loadImages(), [loadImages]);
   useAdminResourceHeader({
     createLabel: "Create Image",
     refreshLabel: "Refresh sandbox images",
     loading,
-    onCreate: openCreateModal,
-    onRefresh: refreshImages,
+    onCreate: () => setModalOpen(true),
+    onRefresh: loadImages,
   });
 
   const { saving, submit } = useResourceSubmit({

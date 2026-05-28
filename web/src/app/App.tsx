@@ -1,16 +1,27 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useOutletContext } from "react-router-dom";
 import { AuthProvider, useAuth } from "../shared/auth/AuthProvider";
+import {
+  loadLandingPage,
+  loadLoginPage,
+  loadPlaygroundPage,
+  loadProtectedAdminShell,
+  loadSandboxContainersPage,
+  loadSandboxImagesPage,
+  loadSystemConfigPage,
+  loadSystemUsersPage,
+  loadWorkProjectsPage,
+} from "./routePreload";
 
-const LandingPage = lazy(() => import("../features/landing/LandingPage").then((module) => ({ default: module.LandingPage })));
-const LoginPage = lazy(() => import("../features/auth/LoginPage").then((module) => ({ default: module.LoginPage })));
-const ProtectedAdminShell = lazy(() => import("./layouts/ProtectedAdminShell").then((module) => ({ default: module.ProtectedAdminShell })));
-const PlaygroundPage = lazy(() => import("../features/playground/PlaygroundPage").then((module) => ({ default: module.PlaygroundPage })));
-const SandboxContainersPage = lazy(() => import("../features/sandbox-containers/SandboxContainersPage").then((module) => ({ default: module.SandboxContainersPage })));
-const SandboxImagesPage = lazy(() => import("../features/sandbox-images/SandboxImagesPage").then((module) => ({ default: module.SandboxImagesPage })));
-const SystemUsersPage = lazy(() => import("../features/system-users/SystemUsersPage").then((module) => ({ default: module.SystemUsersPage })));
-const SystemConfigPage = lazy(() => import("../features/system-config/SystemConfigPage").then((module) => ({ default: module.SystemConfigPage })));
-const WorkProjectsPage = lazy(() => import("../features/work-projects/WorkProjectsPage").then((module) => ({ default: module.WorkProjectsPage })));
+const LandingPage = lazy(() => loadLandingPage().then((module) => ({ default: module.LandingPage })));
+const LoginPage = lazy(() => loadLoginPage().then((module) => ({ default: module.LoginPage })));
+const ProtectedAdminShell = lazy(() => loadProtectedAdminShell().then((module) => ({ default: module.ProtectedAdminShell })));
+const PlaygroundPage = lazy(() => loadPlaygroundPage().then((module) => ({ default: module.PlaygroundPage })));
+const SandboxContainersPage = lazy(() => loadSandboxContainersPage().then((module) => ({ default: module.SandboxContainersPage })));
+const SandboxImagesPage = lazy(() => loadSandboxImagesPage().then((module) => ({ default: module.SandboxImagesPage })));
+const SystemUsersPage = lazy(() => loadSystemUsersPage().then((module) => ({ default: module.SystemUsersPage })));
+const SystemConfigPage = lazy(() => loadSystemConfigPage().then((module) => ({ default: module.SystemConfigPage })));
+const WorkProjectsPage = lazy(() => loadWorkProjectsPage().then((module) => ({ default: module.WorkProjectsPage })));
 
 function ProtectedRoute() {
   const { isAuthenticated } = useAuth();

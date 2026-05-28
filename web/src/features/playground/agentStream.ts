@@ -3,7 +3,7 @@ import type { AgentStreamEvent } from "../../shared/api/types";
 
 const CONNECT_TIMEOUT_MS = 15 * 1000;
 
-export const MAX_BUFFERED_LIVE_EVENTS = 1000;
+const MAX_BUFFERED_LIVE_EVENTS = 1000;
 
 export function bufferLiveEvent(
   sessionId: string,
@@ -23,18 +23,10 @@ export function bufferLiveEvent(
 
 export function waitOpen(socket: WebSocket): Promise<void> {
   if (socket.readyState === WebSocket.OPEN) return Promise.resolve();
-  if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
+  if (socket.readyState !== WebSocket.CONNECTING) {
     return Promise.reject(new Error("websocket connection closed"));
   }
   return new Promise((resolve, reject) => {
-    if (socket.readyState === WebSocket.OPEN) {
-      resolve();
-      return;
-    }
-    if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
-      reject(new Error("websocket connection closed"));
-      return;
-    }
     const cleanup = () => {
       window.clearTimeout(timer);
       socket.removeEventListener("open", onOpen);
