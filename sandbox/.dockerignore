@@ -9,6 +9,8 @@
 !.agents/
 !.agents/skills/
 !.agents/skills/**
+!.agents/SKILL_TEMPLATE.md
+!.agents/validate-skills.sh
 
 **/.DS_Store
 **/Thumbs.db

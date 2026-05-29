@@ -71,7 +71,8 @@ RUN set -eux; \
     \) -prune -exec rm -rf '{}' +; \
     find /opt/ghidra -type f \( \
       -name '*.md' -o \
-      -name '*.pdb' \
+      -name '*.pdb' -o \
+      -name '*.src.zip' \
     \) -delete; \
     find /opt/ghidra -type f -name '*.so' -exec strip --strip-unneeded '{}' + 2>/dev/null || true; \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* /var/cache/apt/*
@@ -101,6 +102,20 @@ RUN set -eux; \
     \) -delete; \
     chmod 755 /opt/jadx/bin/jadx; \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* /var/cache/apt/*
+
+# Validate skills in a build-only stage so lint helpers are not copied into
+# the final sandbox image.
+FROM debian:trixie-slim AS skills-validator
+
+COPY .agents /tmp/.agents
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends bash; \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/*; \
+    find /tmp/.agents/skills -path '*/scripts/*.sh' -type f -exec chmod 755 '{}' +; \
+    chmod 755 /tmp/.agents/validate-skills.sh; \
+    /tmp/.agents/validate-skills.sh /tmp/.agents/skills; \
+    /tmp/.agents/skills/crt.sh/scripts/crt.sh --help >/dev/null
 
 # Final sandbox runtime image.
 FROM debian:trixie-slim
@@ -201,10 +216,9 @@ RUN set -eux; \
     test -x /opt/jadx/bin/jadx
 
 COPY --from=proxy-builder --chmod=755 /sandbox-proxy /usr/local/bin/sandbox-proxy
+COPY --from=skills-validator /tmp/.agents/skills /root/.agents/skills
 COPY --chmod=755 entrypoint.sh /entrypoint.sh
 COPY supervisord.conf /supervisord.conf
-COPY .agents /root/.agents
-RUN chmod 755 /root/.agents/skills/ghidra/scripts/*.sh
 
 EXPOSE 8000
 ENTRYPOINT ["/entrypoint.sh"]

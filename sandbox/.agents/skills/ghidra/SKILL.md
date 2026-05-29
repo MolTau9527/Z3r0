@@ -17,22 +17,22 @@ Perform automated reverse engineering using Ghidra's `analyzeHeadless` tool. Imp
 
 | Task | Command |
 |------|---------|
-| Full analysis with all exports | `ghidra-analyze.sh -s ExportAll.java -o ./output binary` |
-| Decompile to C code | `ghidra-analyze.sh -s ExportDecompiled.java -o ./output binary` |
-| List functions | `ghidra-analyze.sh -s ExportFunctions.java -o ./output binary` |
-| Extract strings | `ghidra-analyze.sh -s ExportStrings.java -o ./output binary` |
-| Get call graph | `ghidra-analyze.sh -s ExportCalls.java -o ./output binary` |
-| Export symbols | `ghidra-analyze.sh -s ExportSymbols.java -o ./output binary` |
+| Full analysis with all exports | `/root/.agents/skills/ghidra/scripts/ghidra-analyze.sh -s ExportAll.java -o ./output binary` |
+| Decompile to C code | `/root/.agents/skills/ghidra/scripts/ghidra-analyze.sh -s ExportDecompiled.java -o ./output binary` |
+| List functions | `/root/.agents/skills/ghidra/scripts/ghidra-analyze.sh -s ExportFunctions.java -o ./output binary` |
+| Extract strings | `/root/.agents/skills/ghidra/scripts/ghidra-analyze.sh -s ExportStrings.java -o ./output binary` |
+| Get call graph | `/root/.agents/skills/ghidra/scripts/ghidra-analyze.sh -s ExportCalls.java -o ./output binary` |
+| Export symbols | `/root/.agents/skills/ghidra/scripts/ghidra-analyze.sh -s ExportSymbols.java -o ./output binary` |
 
 ---
 
-## Main Wrapper Script
+## Custom Script
 
 ```bash
 /root/.agents/skills/ghidra/scripts/ghidra-analyze.sh [options] <binary>
 ```
 
-Wrapper that handles project creation/cleanup and provides a simpler interface to `analyzeHeadless`.
+Always call the wrapper by absolute path. It handles project creation/cleanup and provides a simpler interface to `analyzeHeadless`.
 
 **Options:**
 - `-o, --output <dir>` - Output directory for results (default: current dir)

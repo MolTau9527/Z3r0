@@ -58,7 +58,14 @@ At most 3 async commands may run for one agent instance.
 - Archives: `7z`, `unzip`
 - Shell/runtime: `python3`, `pip3`, `uv`, `node`, `npm`, `nc`
 - Network: `curl`, `wget`, `nmap`, `sqlmap`
-- Android/reversing: `jadx`, `analyzeHeadless`, `/root/.agents/skills/ghidra/scripts/ghidra-analyze.sh`
+- Android/reversing: `jadx`, `analyzeHeadless`
 - Browser: `agent-browser-cli`
+
+## Custom Scripts
+
+Call custom skill scripts by absolute path:
+
+- crt.sh wrapper: `/root/.agents/skills/crt.sh/scripts/crt.sh`
+- Ghidra wrapper: `/root/.agents/skills/ghidra/scripts/ghidra-analyze.sh`
 
 Report only meaningful results: changed files, commands run, relevant output, and failures that affect completion.
