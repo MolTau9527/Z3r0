@@ -20,7 +20,7 @@ export function applyEventToTranscript(transcript: AgentTranscript, event: Agent
       return false;
     case "thinking_delta":
       setAgentName(transcript, event.agent_name);
-      upsertStreamingBlock(transcript.blocks, "thinking", event.segment_id, { delta: event.delta });
+      upsertStreamingBlock(transcript.blocks, "thinking", event.segment_id, { text: event.text });
       return false;
     case "thinking_complete":
       setAgentName(transcript, event.agent_name);
@@ -28,7 +28,7 @@ export function applyEventToTranscript(transcript: AgentTranscript, event: Agent
       return false;
     case "text_delta":
       setAgentName(transcript, event.agent_name);
-      upsertStreamingBlock(transcript.blocks, "text", event.segment_id, { delta: event.delta });
+      upsertStreamingBlock(transcript.blocks, "text", event.segment_id, { text: event.text });
       return false;
     case "text_complete":
       setAgentName(transcript, event.agent_name);
@@ -69,35 +69,24 @@ function upsertStreamingBlock(
   blocks: TranscriptBlock[],
   kind: StreamingItem["kind"],
   segmentId: string,
-  patch: { delta?: string; text?: string; complete?: boolean },
+  patch: { text: string; complete?: boolean },
 ) {
   const index = findStreamingBlockIndex(blocks, kind, segmentId);
   if (index === -1) {
-    const text = patch.text ?? patch.delta ?? "";
-    if (hasCoveredCompletedText(blocks, kind, text)) return;
-    blocks.push({ kind, id: `${kind}:${segmentId}`, segmentId, text, complete: Boolean(patch.complete) } as StreamingItem);
+    if (hasCoveredCompletedText(blocks, kind, patch.text)) return;
+    blocks.push({ kind, id: `${kind}:${segmentId}`, segmentId, text: patch.text, complete: Boolean(patch.complete) } as StreamingItem);
     return;
   }
   const existing = blocks[index] as StreamingItem;
-  if (patch.delta !== undefined) {
-    if (existing.complete) return;
-    if (patch.delta === existing.text || existing.text.endsWith(patch.delta)) return;
-    if (patch.delta.startsWith(existing.text)) {
-      blocks[index] = { ...existing, text: patch.delta };
-      return;
-    }
+  const duplicateIndex = findCompletedTextIndex(blocks, kind, patch.text, index);
+  if (duplicateIndex !== -1) {
+    blocks.splice(index, 1);
+    return;
   }
-  if (patch.text !== undefined) {
-    const duplicateIndex = findCompletedTextIndex(blocks, kind, patch.text, index);
-    if (duplicateIndex !== -1) {
-      blocks.splice(index, 1);
-      return;
-    }
-    if (existing.complete && existing.text === patch.text) return;
-  }
+  if (existing.complete && existing.text === patch.text) return;
   blocks[index] = {
     ...existing,
-    text: patch.text ?? existing.text + (patch.delta ?? ""),
+    text: patch.text,
     complete: patch.complete ?? existing.complete,
   };
 }

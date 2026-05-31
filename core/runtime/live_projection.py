@@ -15,6 +15,8 @@ from schema.agent.events import (
     ThinkingDeltaEvent,
     ToolCallEvent,
     ToolResultEvent,
+    TurnBoundaryEvent,
+    UserMessageEvent,
 )
 
 
@@ -49,6 +51,9 @@ class LiveEventProjection:
         if isinstance(event, RunStateEvent):
             self._events = [event] + [item for item in self._events if not isinstance(item, RunStateEvent)]
             self._rebuild_indexes()
+            return
+        if isinstance(event, (UserMessageEvent, TurnBoundaryEvent)):
+            self._events.append(event)
             return
         if isinstance(event, (TextDeltaEvent, ThinkingDeltaEvent)):
             self._apply_segment(event)
@@ -88,9 +93,7 @@ class LiveEventProjection:
             self._segment_indexes[key] = len(self._events)
             self._events.append(event)
             return
-        current = self._events[index]
-        text = _event_text(current)
-        self._events[index] = event.model_copy(update={"delta": f"{text}{event.delta}"})
+        self._events[index] = event
 
     def _apply_segment_complete(self, event: TextCompleteEvent | ThinkingCompleteEvent) -> None:
         key = _SegmentKey(
@@ -148,11 +151,3 @@ class LiveEventProjection:
                 self._tool_result_indexes[(event.call_id, event.nested_for, event.nested_call_id)] = index
             elif isinstance(event, SubagentTaskEvent):
                 self._subagent_indexes[event.run_id] = index
-
-
-def _event_text(event: AgentEventSchema) -> str:
-    value = getattr(event, "text", None)
-    if isinstance(value, str):
-        return value
-    value = getattr(event, "delta", None)
-    return value if isinstance(value, str) else ""

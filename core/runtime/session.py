@@ -11,7 +11,6 @@ from agents import Runner
 
 from config import get_config
 from core.agent.registry import AgentRegistry, AgentToolSnapshot, SessionAgentGraph
-from core.runtime import put_nowait_drop_oldest
 from core.runtime.context import AgentRuntimeContext, main_agent_instance_id
 from core.runtime.input_items import build_user_message_item, display_text_from_content
 from core.runtime.live_projection import LiveEventProjection
@@ -37,7 +36,7 @@ from service.agent import notifications as agent_notifications
 
 logger = get_logger(__name__)
 
-_SUBSCRIBER_QUEUE_SIZE = 512
+_SUBSCRIBER_REBASE_THRESHOLD = 512
 
 
 class AgentSession:
@@ -64,9 +63,10 @@ class AgentSession:
         self,
         include: Callable[[AgentEventSchema], bool] | None = None,
     ) -> asyncio.Queue[AgentEventSchema]:
-        queue: asyncio.Queue[AgentEventSchema] = asyncio.Queue(maxsize=_SUBSCRIBER_QUEUE_SIZE)
-        for event in self._live_projection.snapshot(include):
-            put_nowait_drop_oldest(queue, event)
+        snapshot = self._live_projection.snapshot(include)
+        queue: asyncio.Queue[AgentEventSchema] = asyncio.Queue()
+        for event in snapshot:
+            queue.put_nowait(event)
         self._subscribers.add(queue)
         return queue
 
@@ -401,7 +401,7 @@ class AgentSession:
         else:
             self._live_projection.apply(event)
         for queue in tuple(self._subscribers):
-            put_nowait_drop_oldest(queue, event)
+            self._enqueue_or_rebase(queue, event)
         if not running:
             self._live_projection.reset(event)
 
@@ -422,7 +422,27 @@ class AgentSession:
         """
         self._live_projection.apply(event)
         for queue in tuple(self._subscribers):
-            put_nowait_drop_oldest(queue, event)
+            self._enqueue_or_rebase(queue, event)
+
+    def _enqueue_or_rebase(self, queue: asyncio.Queue[AgentEventSchema], event: AgentEventSchema) -> None:
+        if queue.qsize() < _SUBSCRIBER_REBASE_THRESHOLD:
+            queue.put_nowait(event)
+            return
+
+        while True:
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+        snapshot = self._live_projection.snapshot()
+        if isinstance(event, DoneEvent):
+            snapshot.append(event)
+        elif isinstance(event, RunStateEvent) and not event.running:
+            snapshot = [item for item in snapshot if not isinstance(item, RunStateEvent)]
+            snapshot.append(event)
+        for item in snapshot:
+            queue.put_nowait(item)
 
 
 @dataclass

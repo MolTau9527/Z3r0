@@ -77,6 +77,7 @@ class _StreamSegmentKey:
 @dataclass(slots=True)
 class _StreamSegment:
     segment_id: str
+    text: str = ""
     complete: bool = False
 
 
@@ -118,6 +119,17 @@ class SdkStreamEventNormalizer:
         if complete:
             segment.complete = True
         return segment.segment_id
+
+    def append_delta(self, key: _StreamSegmentKey, delta: str) -> tuple[str, str]:
+        segment_id = self.segment_id(key, complete=False)
+        segment = self._segments[key]
+        segment.text += delta
+        return segment_id, segment.text
+
+    def complete_text(self, key: _StreamSegmentKey, text: str) -> str:
+        segment_id = self.segment_id(key, complete=True)
+        self._segments[key].text = text
+        return segment_id
 
     def _segment_id(self, key: _StreamSegmentKey) -> str:
         return self._scoped_segment_id(key.kind, self._next_segment_index)
@@ -232,45 +244,57 @@ def _from_raw_response(
     normalizer: SdkStreamEventNormalizer,
 ) -> AgentEventSchema | None:
     if isinstance(data, ResponseTextDeltaEvent):
+        segment_id, text = normalizer.append_delta(_text_segment_key(data, normalizer.response_index), data.delta)
         return TextDeltaEvent(
             created_at=created_at,
             agent_name=current_agent,
-            segment_id=normalizer.segment_id(_text_segment_key(data, normalizer.response_index), complete=False),
+            segment_id=segment_id,
             delta=data.delta,
+            text=text,
         )
     if isinstance(data, ResponseTextDoneEvent):
         return TextCompleteEvent(
             created_at=created_at,
             agent_name=current_agent,
-            segment_id=normalizer.segment_id(_text_segment_key(data, normalizer.response_index), complete=True),
+            segment_id=normalizer.complete_text(_text_segment_key(data, normalizer.response_index), data.text),
             text=data.text,
         )
     if isinstance(data, ResponseReasoningTextDeltaEvent):
+        segment_id, text = normalizer.append_delta(
+            _thinking_text_segment_key(data, normalizer.response_index),
+            data.delta,
+        )
         return ThinkingDeltaEvent(
             created_at=created_at,
             agent_name=current_agent,
-            segment_id=normalizer.segment_id(_thinking_text_segment_key(data, normalizer.response_index), complete=False),
+            segment_id=segment_id,
             delta=data.delta,
+            text=text,
         )
     if isinstance(data, ResponseReasoningTextDoneEvent):
         return ThinkingCompleteEvent(
             created_at=created_at,
             agent_name=current_agent,
-            segment_id=normalizer.segment_id(_thinking_text_segment_key(data, normalizer.response_index), complete=True),
+            segment_id=normalizer.complete_text(_thinking_text_segment_key(data, normalizer.response_index), data.text),
             text=data.text,
         )
     if isinstance(data, ResponseReasoningSummaryTextDeltaEvent):
+        segment_id, text = normalizer.append_delta(
+            _thinking_summary_segment_key(data, normalizer.response_index),
+            data.delta,
+        )
         return ThinkingDeltaEvent(
             created_at=created_at,
             agent_name=current_agent,
-            segment_id=normalizer.segment_id(_thinking_summary_segment_key(data, normalizer.response_index), complete=False),
+            segment_id=segment_id,
             delta=data.delta,
+            text=text,
         )
     if isinstance(data, ResponseReasoningSummaryTextDoneEvent):
         return ThinkingCompleteEvent(
             created_at=created_at,
             agent_name=current_agent,
-            segment_id=normalizer.segment_id(_thinking_summary_segment_key(data, normalizer.response_index), complete=True),
+            segment_id=normalizer.complete_text(_thinking_summary_segment_key(data, normalizer.response_index), data.text),
             text=data.text,
         )
     if isinstance(data, ResponseErrorEvent):

@@ -1710,14 +1710,20 @@ export interface components {
              * @default null
              */
             exit_code: number | null;
-            /** Output Bytes */
+            /**
+             * Output Bytes
+             * @default 0
+             */
             output_bytes: number;
             /**
              * Output File
              * @default null
              */
             output_file: string | null;
-            /** Output Lines */
+            /**
+             * Output Lines
+             * @default 0
+             */
             output_lines: number;
             /**
              * Run Id
@@ -1970,6 +1976,8 @@ export interface components {
             nested_for: string;
             /** Segment Id */
             segment_id: string;
+            /** Text */
+            text: string;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -2034,6 +2042,8 @@ export interface components {
             nested_for: string;
             /** Segment Id */
             segment_id: string;
+            /** Text */
+            text: string;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}

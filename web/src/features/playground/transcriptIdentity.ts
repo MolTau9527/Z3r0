@@ -18,11 +18,11 @@ export function contentSignature(content: AgentInputPart[]): string {
 export function transcriptHasEvent(transcript: AgentTranscript, event: AgentContentEvent): boolean {
   switch (event.type) {
     case "thinking_delta":
-      return hasCoveredCompletedText(transcript.blocks, "thinking", event.delta);
+      return hasCoveredCompletedText(transcript.blocks, "thinking", event.text);
     case "thinking_complete":
       return hasCoveredCompletedText(transcript.blocks, "thinking", event.text);
     case "text_delta":
-      return hasCoveredCompletedText(transcript.blocks, "text", event.delta);
+      return hasCoveredCompletedText(transcript.blocks, "text", event.text);
     case "text_complete":
       return hasCoveredCompletedText(transcript.blocks, "text", event.text);
     case "tool_call":

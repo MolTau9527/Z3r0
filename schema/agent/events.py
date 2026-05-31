@@ -121,6 +121,7 @@ class TextDeltaEvent(_AgentScopedEvent):
     type: Literal[AgentEventTypeSchema.TEXT_DELTA] = AgentEventTypeSchema.TEXT_DELTA
     segment_id: str
     delta: str
+    text: str
 
 
 class TextCompleteEvent(_AgentScopedEvent):
@@ -133,6 +134,7 @@ class ThinkingDeltaEvent(_AgentScopedEvent):
     type: Literal[AgentEventTypeSchema.THINKING_DELTA] = AgentEventTypeSchema.THINKING_DELTA
     segment_id: str
     delta: str
+    text: str
 
 
 class ThinkingCompleteEvent(_AgentScopedEvent):

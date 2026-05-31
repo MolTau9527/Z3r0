@@ -2280,6 +2280,7 @@
             "title": "Exit Code"
           },
           "output_bytes": {
+            "default": 0,
             "minimum": 0,
             "title": "Output Bytes",
             "type": "integer"
@@ -2297,6 +2298,7 @@
             "title": "Output File"
           },
           "output_lines": {
+            "default": 0,
             "minimum": 0,
             "title": "Output Lines",
             "type": "integer"
@@ -2318,9 +2320,7 @@
           }
         },
         "required": [
-          "status",
-          "output_bytes",
-          "output_lines"
+          "status"
         ],
         "title": "SandboxCommandResultMetadata",
         "type": "object"
@@ -2757,6 +2757,10 @@
             "title": "Segment Id",
             "type": "string"
           },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
           "type": {
             "const": "text_delta",
             "default": "text_delta",
@@ -2767,7 +2771,8 @@
         "required": [
           "created_at",
           "segment_id",
-          "delta"
+          "delta",
+          "text"
         ],
         "title": "TextDeltaEvent",
         "type": "object"
@@ -2847,6 +2852,10 @@
             "title": "Segment Id",
             "type": "string"
           },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
           "type": {
             "const": "thinking_delta",
             "default": "thinking_delta",
@@ -2857,7 +2866,8 @@
         "required": [
           "created_at",
           "segment_id",
-          "delta"
+          "delta",
+          "text"
         ],
         "title": "ThinkingDeltaEvent",
         "type": "object"
