@@ -16,7 +16,7 @@ from core.runtime.context import AgentRuntimeContext, main_agent_instance_id
 from core.runtime.input_items import build_user_message_item, display_text_from_content
 from core.runtime.live_projection import LiveEventProjection
 from core.runtime.notification_dispatch import signal_target_notifications
-from core.runtime.partial_context import DeltaBuffer, flush_partial_context, incomplete_segment_events, track_delta
+from core.runtime.partial_context import DeltaBuffer, discard_partial_stream, incomplete_segment_events, track_delta
 from core.runtime.streaming import StreamIdleTimeout, next_segment_scope
 from core.task_runtime import InterruptSignal, TurnTrigger, iter_interruptible_events, replace_trigger, run_until_idle
 from core.conversation.store import Z3r0Session
@@ -32,7 +32,7 @@ from schema.agent.events import (
     RunStateEvent,
     UserMessageEvent,
 )
-from schema.agent.notifications import AgentNotificationKind, AgentNotificationSnapshot
+from schema.agent.notifications import AgentNotificationSnapshot
 from service.agent import notifications as agent_notifications
 
 
@@ -203,13 +203,18 @@ class AgentSession:
             await task
         except asyncio.CancelledError:
             pass
-        await agent_notifications.cancel_session_notifications(
+        # The cancelled task's ``_finalize_interrupted_turn`` has already
+        # published a boundary ``*Complete`` event for any in-flight segment
+        # plus a ``DoneEvent`` so the live projection ends in a finalised
+        # state. We only need to (a) drop main-agent notifications the user
+        # explicitly abandoned and (b) update session liveness; freshly
+        # enqueued USER_MESSAGE notifications are preserved so the next
+        # idle cycle still honours them.
+        await agent_notifications.cancel_main_agent_interrupted_notifications(
             self.session_id,
             "Discarded by user interrupt.",
-            kind=AgentNotificationKind.USER_MESSAGE,
         )
         await _mark_session_stopped(self.session_id)
-        await self._publish(DoneEvent(created_at=datetime.now()))
         await self._publish_idle_if_inactive()
         return True
 
@@ -324,25 +329,27 @@ class AgentSession:
                 track_delta(buffers, event)
                 await self._publish(_tag(event))
             buffers.clear()
-        except InterruptSignal:
-            boundary_events = incomplete_segment_events(buffers, agent_name=agent.name)
-            await flush_partial_context(stream, memory_session, buffers, log_label="agent")
-            for evt in boundary_events:
-                await self._publish(_tag(evt))
-            await self._publish(_tag(DoneEvent(created_at=datetime.now(), agent_name=agent.name)))
-            raise
-        except asyncio.CancelledError:
-            await flush_partial_context(stream, memory_session, buffers, log_label="agent")
+        except (InterruptSignal, asyncio.CancelledError):
+            # Both paths end the turn mid-flight; emit boundary + done so the
+            # live projection sees in-flight deltas as finalized and clients
+            # don't get a dangling stream on reconnect. Partial buffers are
+            # intentionally dropped (see ``discard_partial_stream``).
+            await self._finalize_interrupted_turn(
+                stream=stream,
+                buffers=buffers,
+                tag=_tag,
+                agent_name=agent.name,
+            )
             raise
         except StreamIdleTimeout as exc:
-            await flush_partial_context(stream, memory_session, buffers, log_label="agent")
+            await discard_partial_stream(stream, buffers, log_label="agent")
             logger.warning(
                 "agent stream idle timeout session=%s agent=%s phase=%s timeout=%d",
                 self.session_id, turn_agent_code, exc.phase, exc.timeout_seconds,
             )
             stream_error = ErrorEvent(created_at=datetime.now(), agent_name=agent.name, message=str(exc))
         except Exception as exc:
-            await flush_partial_context(stream, memory_session, buffers, log_label="agent")
+            await discard_partial_stream(stream, buffers, log_label="agent")
             logger.exception("agent stream failed session=%s: %s", self.session_id, exc)
             stream_error = ErrorEvent(created_at=datetime.now(), agent_name=agent.name, message=str(exc))
 
@@ -350,6 +357,20 @@ class AgentSession:
             await self._publish(_tag(stream_error))
         await self._publish(_tag(DoneEvent(created_at=datetime.now(), agent_name=agent.name)))
         return stream
+
+    async def _finalize_interrupted_turn(
+        self,
+        *,
+        stream: Any,
+        buffers: dict[str, DeltaBuffer],
+        tag: Callable[[AgentEventSchema], AgentEventSchema],
+        agent_name: str,
+    ) -> None:
+        boundary_events = incomplete_segment_events(buffers, agent_name=agent_name)
+        await discard_partial_stream(stream, buffers, log_label="agent")
+        for evt in boundary_events:
+            await self._publish(tag(evt))
+        await self._publish(tag(DoneEvent(created_at=datetime.now(), agent_name=agent_name)))
 
     async def _ensure_agent_graph(self, agent_code: str, context: AgentRuntimeContext) -> SessionAgentGraph:
         tool_snapshot = AgentToolSnapshot.from_context(context)

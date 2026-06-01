@@ -354,6 +354,29 @@ async def replay_session_events_page(
             limit=limit,
             fetch_limit=fetch_limit,
         )
+        # On the initial load (before_id is None) the current turn alone is
+        # often too narrow for a useful first paint — a single user message
+        # plus one tool_call that delegates to a subagent currently emitting
+        # hundreds of nested items will leave the visible scroll buffer
+        # showing only "the last few messages" until the user manually
+        # scrolls up to fetch more. Keep prepending whole prior turns until
+        # the first paint covers a normal page worth of stored items (or we
+        # reach the start of the session). Each prepended turn is still
+        # turn-aligned so user/assistant boundaries stay clean in the UI.
+        if before_id is None:
+            while has_more and stored_items and len(stored_items) < limit:
+                prior_items, prior_has_more, prior_next_before_id = await _fetch_replay_turn_page(
+                    session,
+                    session_id,
+                    before_id=stored_items[0].message_id,
+                    limit=limit,
+                    fetch_limit=fetch_limit,
+                )
+                if not prior_items:
+                    break
+                stored_items = prior_items + stored_items
+                has_more = prior_has_more
+                next_before_id = prior_next_before_id if prior_has_more else None
         sub_tasks = list((await session.exec(
             select(AgentSubordinateTask)
             .where(AgentSubordinateTask.session_id == session_id)
@@ -414,6 +437,12 @@ async def _fetch_replay_turn_page(
     limit: int,
     fetch_limit: int,
 ) -> tuple[list[StoredItem], bool, int | None]:
+    """Fetch one conversation turn ending before *before_id* (latest turn if None).
+
+    A "turn" starts at the most recent top-level user message that fits the
+    window.  The page extends backwards across sibling fetches until either a
+    user-message boundary is found or history is exhausted.
+    """
     window = await fetch_stored_items(
         session,
         session_id,
@@ -429,11 +458,11 @@ async def _fetch_replay_turn_page(
         turn_start = _top_level_user_index(window)
         if turn_start != -1:
             page = window[turn_start:]
-            return page, True, page[0].message_id if page else None
+            return page, True, page[0].message_id
         older = await fetch_stored_items(
             session,
             session_id,
-            before_id=window[0].message_id if window else before_id,
+            before_id=window[0].message_id,
             limit=fetch_limit,
         )
         if not older:
@@ -441,7 +470,9 @@ async def _fetch_replay_turn_page(
         older_has_more = len(older) > limit
         window = (older[-limit:] if older_has_more else older) + window
         if not older_has_more:
-            return _trim_replay_page_to_turn(window), False, None
+            # End of history reached without a user-message boundary; keep
+            # whatever leading items remain so nothing is silently dropped.
+            return window, False, None
 
 
 def _attach_nested_replay_events(
@@ -466,11 +497,6 @@ def _attach_nested_replay_events(
             events.extend(task_events_by_call_id.get(call_id, ()))
             events.extend(nested_events_by_call_id.get(call_id, ()))
     return events
-
-
-def _trim_replay_page_to_turn(stored_items: list[StoredItem]) -> list[StoredItem]:
-    index = _top_level_user_index(stored_items)
-    return stored_items[index:] if index != -1 else stored_items
 
 
 def _top_level_user_index(stored_items: list[StoredItem]) -> int:

@@ -19,7 +19,7 @@ from core.runtime.notification_dispatch import (
     signal_target_notifications,
 )
 from core.runtime.input_items import build_user_message_item, text_input_content
-from core.runtime.partial_context import DeltaBuffer, flush_partial_context, incomplete_segment_events, track_delta
+from core.runtime.partial_context import DeltaBuffer, discard_partial_stream, incomplete_segment_events, track_delta
 from core.runtime.streaming import StreamIdleTimeout, next_segment_scope
 from core.task_runtime import InterruptSignal, TurnTrigger, iter_interruptible_events, run_until_idle
 from core.sandbox.command_jobs import cancel_agent_async_sandbox_commands
@@ -496,9 +496,13 @@ async def _run_subagent_task(
                     _publish_event(snapshot.session_id, _tag_nested(event, snapshot))
                     await _update_progress_from_event(snapshot, event)
                 buffers.clear()
-            except InterruptSignal:
+            except (InterruptSignal, asyncio.CancelledError):
+                # Both paths end the subagent turn mid-flight; emit boundary +
+                # done so the parent's live projection sees in-flight nested
+                # deltas as finalized and clients don't get a dangling stream
+                # on reconnect. Partial buffers are dropped, not persisted.
                 boundary_events = incomplete_segment_events(buffers, agent_name=child_agent.name)
-                await flush_partial_context(stream, memory_session, buffers, log_label="subagent")
+                await discard_partial_stream(stream, buffers, log_label="subagent")
                 for evt in boundary_events:
                     _publish_event(snapshot.session_id, _tag_nested(evt, snapshot))
                 _publish_event(snapshot.session_id, _tag_nested(
@@ -506,14 +510,11 @@ async def _run_subagent_task(
                     snapshot,
                 ))
                 raise
-            except asyncio.CancelledError:
-                await flush_partial_context(stream, memory_session, buffers, log_label="subagent")
-                raise
             except StreamIdleTimeout as exc:
-                await flush_partial_context(stream, memory_session, buffers, log_label="subagent")
+                await discard_partial_stream(stream, buffers, log_label="subagent")
                 raise RuntimeError(str(exc)) from exc
             except Exception:
-                await flush_partial_context(stream, memory_session, buffers, log_label="subagent")
+                await discard_partial_stream(stream, buffers, log_label="subagent")
                 raise
             return stream
 

@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select, update
 
@@ -313,6 +314,11 @@ async def release_notification(notification_id: str) -> AgentNotificationSnapsho
             return None
         if notification.status != AgentNotificationStatus.PROCESSING.value:
             return snapshot_from_notification(notification)
+        # ``started_at`` is intentionally preserved so that
+        # ``cancel_main_agent_interrupted_notifications`` can distinguish a
+        # USER_MESSAGE that was claimed and released by a user interrupt
+        # (must be cancelled) from a fresh USER_MESSAGE that has never been
+        # processed (must be honoured).
         updated = await session.exec(
             update(AgentNotification)
             .where(
@@ -322,7 +328,6 @@ async def release_notification(notification_id: str) -> AgentNotificationSnapsho
             .values(
                 status=AgentNotificationStatus.PENDING.value,
                 error="",
-                started_at=None,
                 updated_at=now,
             )
         )
@@ -340,7 +345,49 @@ async def cancel_session_notifications(
     error: str = "",
     *,
     target_agent_instance_id: str | None = None,
-    kind: AgentNotificationKind | None = None,
+) -> list[AgentNotificationSnapshot]:
+    return await _cancel_notifications(
+        session_id=session_id,
+        error=error,
+        instance_equals=target_agent_instance_id,
+    )
+
+
+async def cancel_main_agent_interrupted_notifications(
+    session_id: str,
+    error: str = "",
+) -> list[AgentNotificationSnapshot]:
+    """Cancel main-agent notifications that represent interrupted/abandoned work.
+
+    Called on user interrupt.  The filter discards:
+
+    * every SUBAGENT_FINISHED / SANDBOX_ASYNC_JOB_FINISHED notification
+      targeted at the main agent (whether still queued or released back to
+      PENDING by the executor's CancelledError handler), and
+    * any USER_MESSAGE that was already claimed at least once
+      (``started_at`` is set) — those represent work the user explicitly
+      asked to abandon.
+
+    Fresh USER_MESSAGE notifications enqueued by ``start_turn`` during the
+    interrupt window keep ``started_at IS NULL`` and are deliberately
+    preserved so that the next idle cycle (or the user's next ``start_turn``)
+    can still honour them.
+    """
+    return await _cancel_notifications(
+        session_id=session_id,
+        error=error,
+        instance_like=_MAIN_AGENT_TARGET,
+        spare_unclaimed_user_messages=True,
+    )
+
+
+async def _cancel_notifications(
+    *,
+    session_id: str,
+    error: str,
+    instance_equals: str | None = None,
+    instance_like: str | None = None,
+    spare_unclaimed_user_messages: bool = False,
 ) -> list[AgentNotificationSnapshot]:
     now = datetime.now()
     async with get_async_session() as session:
@@ -351,19 +398,24 @@ async def cancel_session_notifications(
                 AgentNotificationStatus.PROCESSING.value,
             ]),
         )
-        if target_agent_instance_id is not None:
-            statement = statement.where(AgentNotification.target_agent_instance_id == target_agent_instance_id)
-        if kind is not None:
-            statement = statement.where(AgentNotification.kind == kind.value)
+        if instance_equals is not None:
+            statement = statement.where(AgentNotification.target_agent_instance_id == instance_equals)
+        if instance_like is not None:
+            statement = statement.where(AgentNotification.target_agent_instance_id.like(instance_like))
+        if spare_unclaimed_user_messages:
+            statement = statement.where(or_(
+                AgentNotification.kind != AgentNotificationKind.USER_MESSAGE.value,
+                AgentNotification.started_at.is_not(None),
+            ))
         rows = (await session.exec(statement)).all()
+        if not rows:
+            return []
         for notification in rows:
             notification.status = AgentNotificationStatus.CANCELED.value
             notification.error = error
             notification.updated_at = now
             notification.finished_at = now
             session.add(notification)
-        if not rows:
-            return []
         await session.commit()
         for notification in rows:
             await session.refresh(notification)
