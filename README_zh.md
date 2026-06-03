@@ -12,7 +12,7 @@
   <a href="#agent-编队">Agent 编队</a> ·
   <a href="#运行模型">运行模型</a> ·
   <a href="#部署运行">部署运行</a> ·
-  <a href="Quickstart_zh.md">快速开始</a>
+  <a href="QUICKSTART_zh.md">快速开始</a>
 </p>
 
 ---
@@ -245,7 +245,7 @@ sandbox/     可选 Docker 沙箱镜像
 
 ## 部署运行
 
-完整部署步骤见 [Quickstart_zh.md](Quickstart_zh.md)。
+完整部署步骤见 [QUICKSTART_zh.md](QUICKSTART_zh.md)。
 
 ```bash
 cp .z3r0/config.json.example .z3r0/config.json

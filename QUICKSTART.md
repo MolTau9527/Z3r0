@@ -2,7 +2,7 @@
 
 <p>
   <strong>English</strong> ·
-  <a href="Quickstart_zh.md">中文</a> ·
+  <a href="QUICKSTART_zh.md">中文</a> ·
   <a href="README.md">README</a>
 </p>
 

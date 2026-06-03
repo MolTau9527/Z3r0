@@ -118,7 +118,11 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Z3r0 - AI + Security Attack Platform", lifespan=lifespan)
+    app = FastAPI(
+        title="Z3r0 - A controlled multi-agent workbench for authorized security assessment, code auditing, internal review, and controlled research.",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
 
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, request_validation_exception_handler)

@@ -1,7 +1,7 @@
 # Z3r0 快速开始
 
 <p>
-  <a href="Quickstart.md">English</a> ·
+  <a href="QUICKSTART.md">English</a> ·
   <strong>中文</strong> ·
   <a href="README_zh.md">README</a>
 </p>
