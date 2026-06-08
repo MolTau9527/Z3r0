@@ -5,10 +5,12 @@ import {
   ChevronRight,
   Edit3,
   FolderKanban,
+  FolderOpen,
   RotateCcw,
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useRefreshWorkProjects } from "../../app/layouts/AdminLayout";
 import {
   cancelWorkProject,
@@ -37,7 +39,6 @@ import {
   WorkProjectSummaries,
   WorkProjectTasks,
   WorkProjectTypeTag,
-  workProjectAssetLines,
   workProjectOwnerNames,
 } from "./workProjectView";
 
@@ -52,6 +53,7 @@ export function WorkProjectsPage() {
   const [editingProject, setEditingProject] = useState<WorkProject | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const refreshProjectSidebar = useRefreshWorkProjects();
+  const navigate = useNavigate();
   const [adminAction, setAdminAction] = useState<{ id: number; type: AdminAction } | null>(null);
 
   const refreshAll = useCallback(async () => {
@@ -83,7 +85,7 @@ export function WorkProjectsPage() {
       (acc, project) => ({
         working: acc.working + (project.status === "working" ? 1 : 0),
         sessions: acc.sessions + project.session_count,
-        assets: acc.assets + workProjectAssetLines(project).length,
+        assets: acc.assets + project.assets.length,
       }),
       { working: 0, sessions: 0, assets: 0 },
     ),
@@ -148,13 +150,19 @@ export function WorkProjectsPage() {
     { key: "status", header: "Status", width: "104px", render: (project) => <WorkProjectStatusTag project={project} /> },
     {
       key: "scope", header: "Scope", width: "minmax(170px, 0.5fr)",
-      render: (project) => <div className="resource-description">{workProjectAssetLines(project).length} assets · {project.tasks.length} tasks</div>,
+      render: (project) => <div className="resource-description">{project.assets.length} assets · {project.tasks.length} tasks</div>,
     },
     { key: "updated", header: "Updated", width: "minmax(150px, 0.4fr)", render: (p) => formatDateTime(p.updated_at) },
     {
       key: "actions", header: "Actions", width: "132px",
       render: (project) => (
         <div className="row-actions">
+          <Button
+            icon={<FolderOpen size={15} />}
+            theme="borderless"
+            aria-label={`Open workspace for ${project.name}`}
+            onClick={() => navigate(`/work-projects/${project.id}`)}
+          />
           <Button
             icon={<Edit3 size={15} />}
             theme="borderless"
@@ -247,8 +255,6 @@ function WorkProjectExpanded({
 }: {
   project: WorkProject;
 }) {
-  const assets = workProjectAssetLines(project);
-
   return (
     <div className="work-project-expanded">
       <section className="work-project-meta">
@@ -267,7 +273,7 @@ function WorkProjectExpanded({
       </section>
 
       <section className="work-project-detail-grid">
-        <WorkProjectPanel title="Assets" empty={assets.length === 0 ? "No assets." : ""} className="work-project-panel" emptyClassName="work-project-panel-empty">
+        <WorkProjectPanel title="Assets" empty={project.assets.length === 0 ? "No assets." : ""} className="work-project-panel" emptyClassName="work-project-panel-empty">
           <WorkProjectAssets project={project} className="work-project-asset-list" />
         </WorkProjectPanel>
         <WorkProjectPanel title="Tasks" empty={project.tasks.length === 0 ? "No tasks." : ""} className="work-project-panel" emptyClassName="work-project-panel-empty">

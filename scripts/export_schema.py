@@ -31,6 +31,8 @@ def export_openapi_schema() -> Path:
 
 
 def export_frontend_contract_constants(schema: dict[str, Any]) -> Path:
+    from schema.work_project.graph import EDGE_TYPE_CATEGORY, WorkProjectGraphEdgeCategory
+
     default_command = _get_schema_property_default(
         schema,
         "CreateSandboxContainerRequest",
@@ -38,6 +40,10 @@ def export_frontend_contract_constants(schema: dict[str, Any]) -> Path:
     )
     if not isinstance(default_command, str):
         raise RuntimeError("CreateSandboxContainerRequest.container_command default must be a string")
+
+    # Edge category is derived from edge type in Python, so it is serialized from that single source.
+    edge_categories = [category.value for category in WorkProjectGraphEdgeCategory]
+    edge_type_category = {edge_type.value: category.value for edge_type, category in EDGE_TYPE_CATEGORY.items()}
 
     FRONTEND_CONTRACT_CONSTANTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     FRONTEND_CONTRACT_CONSTANTS_PATH.write_text(
@@ -47,6 +53,15 @@ def export_frontend_contract_constants(schema: dict[str, Any]) -> Path:
         f"export const WORK_PROJECT_TYPES = {_enum_values_ts(schema, 'WorkProjectType')} as const;\n"
         f"export const WORK_PROJECT_STATUSES = {_enum_values_ts(schema, 'WorkProjectStatus')} as const;\n"
         f"export const WORK_PROJECT_TASK_STATUSES = {_enum_values_ts(schema, 'WorkProjectTaskStatus')} as const;\n"
+        f"export const WORK_PROJECT_ASSET_TYPES = {_enum_values_ts(schema, 'WorkProjectAssetType')} as const;\n"
+        f"export const WORK_PROJECT_ASSET_TYPE = {_enum_object_ts(schema, 'WorkProjectAssetType')} as const;\n"
+        f"export const WORK_PROJECT_ASSET_ORIGINS = {_enum_values_ts(schema, 'WorkProjectAssetOrigin')} as const;\n"
+        f"export const WORK_PROJECT_FINDING_SEVERITIES = {_enum_values_ts(schema, 'WorkProjectFindingSeverity')} as const;\n"
+        f"export const WORK_PROJECT_FINDING_STATUSES = {_enum_values_ts(schema, 'WorkProjectFindingStatus')} as const;\n"
+        f"export const WORK_PROJECT_GRAPH_EDGE_TYPES = {_enum_values_ts(schema, 'WorkProjectGraphEdgeType')} as const;\n"
+        f"export const WORK_PROJECT_GRAPH_EDGE_CATEGORIES = {json.dumps(edge_categories)} as const;\n"
+        f"export const WORK_PROJECT_GRAPH_EDGE_CATEGORY = {json.dumps(edge_type_category)} as const;\n"
+        f"export const WORK_PROJECT_ATTACK_PATH_STATUSES = {_enum_values_ts(schema, 'WorkProjectAttackPathStatus')} as const;\n"
         f"export const SANDBOX_IMAGE_STATUSES = {_enum_values_ts(schema, 'SandboxImageStatus')} as const;\n"
         f"export const SANDBOX_CONTAINER_STATUSES = {_enum_values_ts(schema, 'SandboxContainerStatus')} as const;\n"
         f"export const SESSION_TYPES = {_enum_values_ts(schema, 'SessionType')} as const;\n\n"
@@ -61,6 +76,17 @@ def _enum_values_ts(schema: dict[str, Any], schema_name: str) -> str:
     if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
         raise RuntimeError(f"OpenAPI schema is missing string enum {schema_name}")
     return json.dumps(values)
+
+
+def _enum_object_ts(schema: dict[str, Any], schema_name: str) -> str:
+    values = schema.get("components", {}).get("schemas", {}).get(schema_name, {}).get("enum")
+    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+        raise RuntimeError(f"OpenAPI schema is missing string enum {schema_name}")
+    return json.dumps({_enum_member_name(value): value for value in values})
+
+
+def _enum_member_name(value: str) -> str:
+    return value.upper().replace("-", "_")
 
 
 def _get_schema_property_default(schema: dict[str, Any], schema_name: str, property_name: str) -> Any:

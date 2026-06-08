@@ -23,13 +23,14 @@
 >
 > This project is provided only for authorized security assessment, code auditing, internal review, and controlled research. It does not grant permission to test, access, scan, or affect any third-party system, network, service, account, or data. Users are solely responsible for obtaining and preserving authorization, defining scope, and complying with applicable laws, contracts, and authorization boundaries.
 
-Z3r0 is a controlled multi-agent workbench for authorized security assessment, code auditing, internal review, and controlled research. It coordinates a lead security agent, domain specialists, and Docker-backed execution surfaces so planning, evidence collection, validation, manual review, and reporting remain in a governed workflow.
+Z3r0 is a controlled multi-agent workbench for authorized security assessment, code auditing, internal review, and controlled research. It coordinates a lead security agent, domain specialists, Docker-backed execution surfaces, and WorkProject records so planning, asset discovery, risk validation, relationship mapping, attack-path reconstruction, and manual review remain in one governed workflow.
 
 ## Design Principles
 
 - **Authorized operation first**: Z3r0 is designed for approved internal assessments, code review, training, and controlled research environments.
 - **Clear role boundaries**: a coordinator decomposes the task, while specialist agents handle intelligence, penetration validation, code audit, reverse engineering, and cryptographic review within defined scopes.
 - **Traceable work**: sessions, tool calls, delegation jobs, and streamed events are persisted so reviews can be resumed and audited.
+- **Durable project records**: WorkProject sessions persist assets, findings, relationship edges, and attack paths as first-class review objects.
 - **Controlled execution**: command execution, browser access, file management, and GUI tooling run through bound Docker sandboxes.
 - **Model abstraction**: model access is kept behind runtime and role interfaces, using native OpenAI-compatible providers with configurable Chat Completions or Responses mode.
 
@@ -45,7 +46,7 @@ flowchart TB
   Notifications["Notification Obligations<br/>Liveness Layer"]
   Graph["Session Agent Graph<br/>Capability Layer"]
   Timeline["Timeline Event Log<br/>Replay Layer"]
-  Record["Assessment Record<br/>Review Layer"]
+  Record["WorkProject Records<br/>Review Layer"]
   Sandbox["Docker Sandbox<br/>Execution Layer"]
   Tools["Tool Surface<br/>Tool Layer"]
   Models["Model Providers<br/>Model Layer"]
@@ -72,7 +73,7 @@ flowchart TB
   Events --> Workbench
 ```
 
-The system is organized into explicit layers: user-facing workbench, API boundary, runtime orchestration, resumable instance drivers, notification-backed liveness, session agent graph, controlled execution, model access, streaming event contract, durable timeline replay, and persisted assessment records. The backend owns authentication, session lifecycle, context projection, event normalization, delegation, sandbox binding, tool mounting, notification obligations, persistence, and history compaction. The frontend consumes stable REST and WebSocket contracts and does not depend on model SDK or provider internals.
+The system is organized into explicit layers: user-facing workbench, API boundary, runtime orchestration, resumable instance drivers, notification-backed liveness, session agent graph, controlled execution, model access, streaming event contract, durable timeline replay, and persisted WorkProject records. The backend owns authentication, session lifecycle, context projection, event normalization, delegation, sandbox binding, tool mounting, notification obligations, persistence, project-scoped records, and history compaction. The frontend consumes stable REST and WebSocket contracts and does not depend on model SDK or provider internals.
 
 ## Agent Team
 
@@ -101,7 +102,7 @@ flowchart TB
   CCE --> S3["Knowledge and Sandbox Tools"]
 ```
 
-Agent capabilities are assembled per session. `AgentRegistry` uses configuration, role specifications, knowledge generation, and the current sandbox binding to create a session-level agent graph. Command tools are mounted only when an authorized, running sandbox is bound to the session.
+Agent capabilities are assembled per session. `AgentRegistry` uses configuration, role specifications, knowledge generation, the current sandbox binding, and the current WorkProject binding to create a session-level agent graph. Command tools are mounted only when an authorized, running sandbox is bound to the session. WorkProject record tools are mounted only for project sessions, keeping ordinary chat sessions separate from assets, findings, relationship edges, and attack paths.
 
 ## Runtime Model
 
@@ -215,6 +216,66 @@ flowchart LR
 
 The optional sandbox image can include a browser, noVNC, reverse engineering utilities, network assessment utilities, and related review tools. Synchronous commands return captured output metadata immediately. Asynchronous commands are deliberately turn-terminal: after dispatch, the agent stops and is resumed only after the job completes or fails, with terminal status, exit code, output size, and output file delivered through the owner notification. Agents read completed output with `read_sandbox_command_output`; they do not poll running jobs.
 
+## WorkProject Records
+
+WorkProject sessions are the durable assessment workspace. They keep structured records outside the model context and outside SDK-owned tables:
+
+- **Assets**: the only graph nodes. `type` is one of `service`, `domain`, `network`, or `binary`; `service`/`domain`/`network` use the `host` field (port optional for `service`), `binary` uses `path`, and a short recon `banner` is stored in the small `extra` object. `origin` marks each asset as declared `scope` or agent-`discovered`. Each asset is keyed by a normalized `(type, identifier)` identity.
+- **Findings**: suspected, validated, or false-positive risks. A finding records the affected asset and carries its own proof in `description`/`impact`; when it substantiates a relationship or attack step it is attached to the relevant graph edge.
+- **Relationship graph**: directed edges between two assets. The `type` is either structural (`related`, `resolves_to`, `hosts`, `connects_to`, `trusts`) describing the target architecture, or offensive (`exploits`, `pivots_to`, `leads_to`) describing attack progression. Findings attached to an edge are its supporting evidence.
+- **Attack paths**: ordered chains where each step traverses one relationship edge, explaining how access or impact progressed.
+
+These records are read through WorkProject-scoped REST APIs and project-session UI views, and are created and updated by agents through session tools when the session has a bound WorkProject; ordinary chat sessions do not receive these tools or UI entry points. Agent summaries remain compact checkpoints, while durable facts live in the structured project records. Report generation remains a planned roadmap phase and is not part of the current implementation.
+
+### Auditable Attack Chain
+
+The four record types form a single graph: assets are nodes, edges are directed relationships between them, findings are the evidence attached to a node and/or an edge, and an attack path is an ordered walk over edges. An edge's structural-vs-offensive category is derived from its `type` (it is not a stored column). Because every claim is pinned to the graph element it describes, the whole assessment is traceable end to end.
+
+```mermaid
+erDiagram
+  ASSET {
+    enum   type        "service | domain | network | binary"
+    enum   origin      "scope | discovered"
+    string identifier  "(type, identifier) identity"
+    string created_by_agent_code  "provenance"
+    string created_from_session_id "provenance"
+  }
+  EDGE {
+    enum   type   "related|resolves_to|hosts|connects_to|trusts|exploits|pivots_to|leads_to"
+    string label
+    int    source_asset_id
+    int    target_asset_id
+  }
+  FINDING {
+    enum     status      "suspected | validated | false_positive"
+    int      asset_id    "affected node"
+    int      edge_id     "substantiated relation"
+    datetime validated_at
+  }
+  ATTACK_PATH {
+    enum   status  "suspected | validated | blocked | closed"
+    string title
+  }
+  ATTACK_PATH_STEP {
+    int sequence "ordered hop"
+    int edge_id  "traversed relation"
+  }
+
+  ASSET            ||--o{ EDGE             : "source / target node"
+  ASSET            ||--o{ FINDING          : "affected asset"
+  EDGE             ||--o{ FINDING          : "evidence (edge_id)"
+  EDGE             ||--o{ ATTACK_PATH_STEP : "traversed by"
+  ATTACK_PATH      ||--o{ ATTACK_PATH_STEP : "ordered steps"
+```
+
+The chain is auditable and traceable on five axes:
+
+- **Provenance** — every asset, edge, finding, path, and step carries `created_by_agent_code`, `created_from_session_id`, and `created_at`/`updated_at`, so each fact traces back to the exact agent and session that produced it and when.
+- **Evidence binding** — a finding's `edge_id` ties proof to a specific relationship and its `asset_id` ties proof to a specific node; the proof itself (`description`/`impact`) lives in the finding, so any relation or attack step can be drilled down to the evidence that justifies it.
+- **Confidence lifecycle** — a finding's `status` (`suspected` → `validated`/`false_positive`, with the moment of validation stamped by `validated_at`) and an attack path's `status` (`suspected` → `validated`, or `blocked`/`closed`) make the maturity of every claim explicit; nothing is presented as fact until it is validated.
+- **Replayable path** — an attack path is an ordered list of steps, each pinned to one edge between two assets, so the route from entry to impact can be reconstructed hop by hop, with each hop carrying its own supporting findings.
+- **Scope accountability & integrity** — `origin` separates declared `scope` from agent-`discovered` surface so work can be checked against the engagement boundary, and referential rules keep the graph consistent (deleting an asset purges its edges and detaches its findings; deleting an edge removes the steps that traverse it and detaches its findings), so the audit trail never holds dangling references.
+
 ## Technical Characteristics
 
 - **True async instance drivers**: main and subagent drivers drain ready turns and then stop; they do not block on background children or long sandbox commands. Completion notifications relaunch the owning instance when integration work is ready.
@@ -228,6 +289,7 @@ The optional sandbox image can include a browser, noVNC, reverse engineering uti
 - **Long-context compaction**: model-window-aware summaries preserve durable facts and recent state for long reviews.
 - **Stable streaming contract**: the frontend is decoupled from SDK event details and consumes application-level event schemas.
 - **Sandbox tool invalidation**: sandbox status changes invalidate tool bindings and clean up running subagent tasks or async commands.
+- **Project-scoped security records**: assets, findings, relationship edges, and attack paths are persisted as app-owned WorkProject records and replayed from stable API contracts.
 
 ## Repository Layout
 

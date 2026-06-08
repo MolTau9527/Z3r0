@@ -10,6 +10,7 @@ import {
   loadSandboxImagesPage,
   loadSystemConfigPage,
   loadSystemUsersPage,
+  loadWorkProjectWorkspacePage,
   loadWorkProjectsPage,
 } from "./routePreload";
 
@@ -17,6 +18,7 @@ const LandingPage = lazy(() => loadLandingPage().then((module) => ({ default: mo
 const LoginPage = lazy(() => loadLoginPage().then((module) => ({ default: module.LoginPage })));
 const ProtectedAdminShell = lazy(() => loadProtectedAdminShell().then((module) => ({ default: module.ProtectedAdminShell })));
 const PlaygroundPage = lazy(() => loadPlaygroundPage().then((module) => ({ default: module.PlaygroundPage })));
+const WorkProjectWorkspacePage = lazy(() => loadWorkProjectWorkspacePage().then((module) => ({ default: module.WorkProjectWorkspacePage })));
 const SandboxContainersPage = lazy(() => loadSandboxContainersPage().then((module) => ({ default: module.SandboxContainersPage })));
 const SandboxImagesPage = lazy(() => loadSandboxImagesPage().then((module) => ({ default: module.SandboxImagesPage })));
 const SystemUsersPage = lazy(() => loadSystemUsersPage().then((module) => ({ default: module.SystemUsersPage })));
@@ -64,6 +66,7 @@ export function App() {
                 <Route path="/playground" element={<PlaygroundPage />} />
                 <Route element={<AdminOnlyRoute />}>
                   <Route path="/work-projects" element={<WorkProjectsPage />} />
+                  <Route path="/work-projects/:projectId" element={<WorkProjectWorkspacePage />} />
                   <Route path="/sandbox-images" element={<SandboxImagesPage />} />
                   <Route path="/sandbox-containers" element={<SandboxContainersPage />} />
                   <Route path="/system-users" element={<SystemUsersPage />} />

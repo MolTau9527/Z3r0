@@ -14,7 +14,6 @@ class WorkProject(SQLModel, table=True):
     name: str = Field(default="")
     description: str = Field(default="")
     sandbox_container_id: int | None = Field(default=None, foreign_key="sandbox_containers.id")
-    assets_text: str = Field(default="")
     tasks: list[dict] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
     agent_summaries: dict[str, dict] = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
     progress: float = Field(default=0)

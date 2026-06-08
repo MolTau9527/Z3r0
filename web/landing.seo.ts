@@ -3,7 +3,7 @@ export const landingSeo = {
   siteName: "Z3r0",
   title: "Z3r0 - Multi-Agent Security Workbench for Authorized Assessment, Code Audit, and Controlled Research",
   description:
-    "Z3r0 is a controlled multi-agent security workbench for authorized security assessment, code auditing, dependency review, internal review, reverse engineering review, cryptography review, and controlled research.",
+    "Z3r0 is a controlled multi-agent security workbench for authorized assessment, code auditing, finding-backed validation, WorkProject records, relationship graphs, attack-path replay, and controlled research.",
   imagePath: "assets/z3r0-logo.png",
   imageAlt: "Z3r0 logo",
   keywords: [
@@ -15,6 +15,10 @@ export const landingSeo = {
     "source code security audit",
     "dependency review",
     "vulnerability validation",
+    "attack path replay",
+    "security finding management",
+    "asset relationship graph",
+    "WorkProject records",
     "Docker sandbox assessment",
     "security research workbench",
     "agent orchestration",
@@ -50,7 +54,7 @@ export const structuredData = [
         name: "What is Z3r0?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Z3r0 is a controlled multi-agent security workbench for authorized security assessment, code auditing, internal review, validation, and controlled research.",
+          text: "Z3r0 is a controlled multi-agent security workbench for authorized security assessment, code auditing, finding-backed validation, WorkProject records, relationship graphs, attack-path replay, and controlled research.",
         },
       },
       {

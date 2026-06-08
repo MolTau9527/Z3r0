@@ -2,6 +2,7 @@
 .claude
 .cursor
 .trellis
+.codegraph
 
 /.agents
 /AGENTS.md

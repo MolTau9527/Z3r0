@@ -12,7 +12,7 @@ import {
 } from "../../shared/api/workProjects";
 import type { AgentSessionSummary, WorkProject } from "../../shared/api/types";
 import { useResourceSubmit } from "../../shared/hooks/useResourceSubmit";
-import { WorkProjectInfoModal } from "./WorkProjectInfoModal";
+import { WorkProjectInfoModal } from "../work-projects/WorkProjectInfoModal";
 
 const PROJECT_REFRESH_INTERVAL_MS = 5000;
 

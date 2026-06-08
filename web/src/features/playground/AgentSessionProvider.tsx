@@ -79,6 +79,7 @@ type AgentSessionContextValue = {
   dropSessionRuntime: (sessionId: string) => void;
 
   activeSessionId: string | null;
+  activeSessionSummary: AgentSessionSummary | null;
   selectSession: (sessionId: string | null, options?: { navigateBlank?: boolean }) => void;
 
   chatState: ChatState;
@@ -636,10 +637,11 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
 
   // -------------------------------------------------------------- derived
   const activeRuntime = activeSessionId ? runtimes.get(activeSessionId) ?? DEFAULT_RUNTIME : DEFAULT_RUNTIME;
+  const activeSessionSummary = activeSessionId ? knownSessions.get(activeSessionId) ?? null : null;
   const value = useMemo<AgentSessionContextValue>(() => ({
     sessions, sessionsLoading, refreshSessions, syncSessions, deleteSession,
     dropSessionRuntime,
-    activeSessionId, selectSession,
+    activeSessionId, activeSessionSummary, selectSession,
     chatState: activeRuntime.state,
     status: activeRuntime.status,
     historyLoading: activeRuntime.historyLoading,
@@ -652,7 +654,7 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
   }), [
     sessions, sessionsLoading, refreshSessions, syncSessions, deleteSession,
     dropSessionRuntime,
-    activeSessionId, selectSession,
+    activeSessionId, activeSessionSummary, selectSession,
     activeRuntime,
     agents, defaultAgentCode, activeAgentCode, setActiveAgentCode,
     getSessionAgentCode,

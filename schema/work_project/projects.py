@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from schema.agent.sessions import AgentSessionSummarySchema
 from schema.common.responses import PaginatedResponse
 from schema.system_user.users import SystemUserRole
+from schema.work_project.assets import WorkProjectAssetRequest, WorkProjectAssetSchema
 
 
 # canonical work project status; reused by the model and by the public schema
@@ -64,7 +65,6 @@ class WorkProjectAgentSummaryContentSchema(BaseModel):
     decisions: list[str] = Field(default_factory=list, max_length=64, description="Decisions or scope changes made by this agent.")
     blockers: list[str] = Field(default_factory=list, max_length=64, description="Current blockers or unresolved risks.")
     next_steps: list[str] = Field(default_factory=list, max_length=64, description="Concrete next actions.")
-    evidence: list[str] = Field(default_factory=list, max_length=64, description="Evidence references such as commands, files, URLs, logs, or artifacts.")
     notes: str = Field(default="", max_length=4000, description="Brief extra context that does not fit other fields.")
 
     @field_validator("task_id", "task_title", "status", "notes", mode="before")
@@ -74,7 +74,7 @@ class WorkProjectAgentSummaryContentSchema(BaseModel):
             return value.strip()
         return value
 
-    @field_validator("findings", "decisions", "blockers", "next_steps", "evidence", mode="after")
+    @field_validator("findings", "decisions", "blockers", "next_steps", mode="after")
     @classmethod
     def normalize_items(cls, value: list[str]) -> list[str]:
         return [item.strip() for item in value if isinstance(item, str) and item.strip()]
@@ -114,7 +114,7 @@ class WorkProjectSchema(BaseModel):
     owner_user_ids: list[int]
     owners: list[WorkProjectOwnerSchema]
     sandbox_container_id: int | None = None
-    assets_text: str
+    assets: list[WorkProjectAssetSchema]
     tasks: list[WorkProjectTaskSchema]
     agent_summaries: list[WorkProjectAgentSummarySchema]
     progress: float = Field(default=0, ge=0, le=100)
@@ -138,7 +138,7 @@ class WorkProjectMetadataRequest(BaseModel):
     description: str = Field(default="", max_length=2000)
     owner_user_ids: list[int] = Field(default_factory=list, max_length=100)
     sandbox_container_id: int | None = Field(default=None, gt=0)
-    assets_text: str = Field(default="", max_length=20000)
+    assets: list[WorkProjectAssetRequest] = Field(min_length=1, max_length=500)
     type: WorkProjectType = WorkProjectType.PENETRATION_TEST
 
     @field_validator("name", "description", mode="before")

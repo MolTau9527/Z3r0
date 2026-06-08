@@ -12,9 +12,11 @@ from model.agent.sessions import AgentSessionMeta
 from model.sandbox.containers import SandboxContainer
 from model.system_user.users import SystemUser
 from model.work_project.projects import WorkProject, WorkProjectOwner
+from model.work_project.assets import WorkProjectAsset
 from schema.agent.sessions import AgentSessionSummarySchema, SessionType
 from schema.sandbox.containers import SandboxContainerStatus
 from schema.system_user.users import SystemUserRole
+from schema.work_project.assets import WorkProjectAssetOrigin, WorkProjectAssetRequest, WorkProjectAssetType
 from schema.work_project.projects import (
     CreateWorkProjectRequest,
     UpdateWorkProjectMetadataRequest,
@@ -26,6 +28,7 @@ from schema.work_project.projects import (
 )
 from service.agent.sessions import cancel_sessions, delete_session, ensure_sdk_session_row, list_sessions
 from service.common.pagination import Page, paginate_statement
+from service.work_project.assets import apply_asset_request
 from service.work_project.progress import derive_work_project_status
 
 
@@ -54,7 +57,14 @@ def can_retry_work_project(status: WorkProjectStatus) -> bool:
 
 async def validate_work_project_metadata(
     request: CreateWorkProjectRequest | UpdateWorkProjectMetadataRequest,
+    project_id: int | None = None,
 ) -> str:
+    if not request.assets:
+        return "at least one asset is required"
+    duplicate_asset = _duplicate_asset_identity(request.assets)
+    if duplicate_asset:
+        return f"duplicate asset: {duplicate_asset}"
+
     async with get_async_session() as session:
         if request.owner_user_ids:
             users = (await session.exec(
@@ -85,7 +95,6 @@ async def create_work_project(request: CreateWorkProjectRequest) -> WorkProjectS
         name=request.name,
         description=request.description,
         sandbox_container_id=request.sandbox_container_id,
-        assets_text=request.assets_text,
         tasks=[],
         progress=0,
         status=WorkProjectStatus.WORKING,
@@ -97,7 +106,9 @@ async def create_work_project(request: CreateWorkProjectRequest) -> WorkProjectS
     async with get_async_session() as session:
         session.add(project)
         await session.flush()
-        _set_project_owner_rows(session, project.id or 0, request.owner_user_ids)
+        project_id = project.id or 0
+        _set_project_owner_rows(session, project_id, request.owner_user_ids)
+        _set_project_asset_rows(session, project_id, request.assets)
         await session.commit()
         await session.refresh(project)
         schema = await _project_schema(session, project)
@@ -131,11 +142,11 @@ async def update_work_project_metadata(
         project.name = request.name
         project.description = request.description
         project.sandbox_container_id = request.sandbox_container_id
-        project.assets_text = request.assets_text
         project.type = request.type
         project.updated_at = datetime.now()
         session.add(project)
         await _replace_project_owners(session, id, request.owner_user_ids)
+        await _upsert_project_assets(session, id, request.assets)
         await session.commit()
         await session.refresh(project)
         schema = await _project_schema(session, project)
@@ -335,6 +346,7 @@ async def _project_schema(
     return WorkProjectSchema(**_project_schema_payload(
         project=project,
         owners=await _owners_for_project(session, project.id or 0),
+        assets=await _assets_for_project(session, project.id or 0),
         session_count=await _session_count_in_tx(session, project.id or 0),
     ))
 
@@ -399,11 +411,13 @@ async def _query_work_projects(
     async with get_async_session() as session:
         counts = await _session_counts(session, [project.id or 0 for project in projects])
         owners = await _owners_by_project(session, [project.id or 0 for project in projects])
+        assets = await _assets_by_project(session, [project.id or 0 for project in projects])
 
         items = [
             WorkProjectSchema(**_project_schema_payload(
                 project=project,
                 owners=owners.get(project.id or 0, []),
+                assets=assets.get(project.id or 0, []),
                 session_count=counts.get(project.id or 0, 0),
             ))
             for project in projects
@@ -414,8 +428,9 @@ async def _query_work_projects(
 def _project_schema_payload(
     project: WorkProject,
     owners: list[WorkProjectOwnerSchema],
+    assets: list[WorkProjectAsset],
     session_count: int,
-) -> dict:
+) -> dict[str, object]:
     return {
         "id": project.id or 0,
         "name": project.name,
@@ -423,7 +438,7 @@ def _project_schema_payload(
         "owner_user_ids": [owner.id for owner in owners],
         "owners": owners,
         "sandbox_container_id": project.sandbox_container_id,
-        "assets_text": project.assets_text,
+        "assets": assets,
         "tasks": [WorkProjectTaskSchema.model_validate(item) for item in project.tasks],
         "agent_summaries": [
             WorkProjectAgentSummarySchema.model_validate(summary)
@@ -464,6 +479,25 @@ async def _owners_for_project(session, project_id: int) -> list[WorkProjectOwner
     return (await _owners_by_project(session, [project_id])).get(project_id, [])
 
 
+async def _assets_by_project(session, project_ids: list[int]) -> dict[int, list[WorkProjectAsset]]:
+    ids = [project_id for project_id in project_ids if project_id > 0]
+    if not ids:
+        return {}
+    rows = (await session.exec(
+        select(WorkProjectAsset)
+        .where(WorkProjectAsset.project_id.in_(ids))
+        .order_by(WorkProjectAsset.project_id, WorkProjectAsset.id)
+    )).all()
+    result: dict[int, list[WorkProjectAsset]] = {project_id: [] for project_id in ids}
+    for asset in rows:
+        result.setdefault(asset.project_id, []).append(asset)
+    return result
+
+
+async def _assets_for_project(session, project_id: int) -> list[WorkProjectAsset]:
+    return (await _assets_by_project(session, [project_id])).get(project_id, [])
+
+
 def _owner_schema(user: SystemUser) -> WorkProjectOwnerSchema:
     return WorkProjectOwnerSchema(
         id=user.id or 0,
@@ -483,6 +517,53 @@ async def _replace_project_owners(session, project_id: int, owner_user_ids: list
     )).all():
         await session.delete(owner)
     _set_project_owner_rows(session, project_id, owner_user_ids)
+
+
+def _set_project_asset_rows(session, project_id: int, assets: list[WorkProjectAssetRequest]) -> None:
+    now = datetime.now()
+    seen: set[tuple[WorkProjectAssetType, str]] = set()
+    for request in assets:
+        if request.identity in seen:
+            continue
+        seen.add(request.identity)
+        asset = WorkProjectAsset(
+            project_id=project_id,
+            origin=WorkProjectAssetOrigin.SCOPE,
+            created_at=now,
+            updated_at=now,
+        )
+        apply_asset_request(asset, request, now)
+        session.add(asset)
+
+
+async def _upsert_project_assets(session, project_id: int, assets: list[WorkProjectAssetRequest]) -> None:
+    rows = (await session.exec(
+        select(WorkProjectAsset).where(WorkProjectAsset.project_id == project_id)
+    )).all()
+    existing = {(asset.type, asset.identifier): asset for asset in rows}
+    seen: set[tuple[WorkProjectAssetType, str]] = set()
+    now = datetime.now()
+    for request in assets:
+        if request.identity in seen:
+            continue
+        seen.add(request.identity)
+        asset = existing.get(request.identity)
+        if asset is None:
+            asset = WorkProjectAsset(project_id=project_id, created_at=now, updated_at=now)
+            existing[request.identity] = asset
+            session.add(asset)
+        # A metadata-declared asset is authoritative project scope, even if an agent discovered it first.
+        asset.origin = WorkProjectAssetOrigin.SCOPE
+        apply_asset_request(asset, request, now)
+
+
+def _duplicate_asset_identity(assets: list[WorkProjectAssetRequest]) -> str:
+    seen: set[tuple[WorkProjectAssetType, str]] = set()
+    for asset in assets:
+        if asset.identity in seen:
+            return f"{asset.type.value}:{asset.identifier}"
+        seen.add(asset.identity)
+    return ""
 
 
 async def can_access_work_project(

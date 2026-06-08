@@ -1,7 +1,13 @@
-import { Input, Select, Spin, Tag, TextArea } from "@douyinfe/semi-ui";
-import { FolderKanban, ScanSearch, Server, UserRound } from "lucide-react";
+import { Button, Input, InputNumber, Select, Spin, Tag, TextArea } from "@douyinfe/semi-ui";
+import { FolderKanban, Plus, ScanSearch, Server, Trash2, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getWorkProjectTypes, isWorkProjectType } from "../../shared/api/contract";
+import {
+  getWorkProjectAssetTypes,
+  getWorkProjectTypes,
+  isWorkProjectAssetType,
+  isWorkProjectType,
+  WORK_PROJECT_ASSET_TYPE,
+} from "../../shared/api/contract";
 import { showApiError } from "../../shared/api/feedback";
 import { queryAvailableSandboxContainers } from "../../shared/api/sandboxContainers";
 import { querySystemUsers } from "../../shared/api/systemUsers";
@@ -10,11 +16,15 @@ import type {
   SandboxContainer,
   SystemUser,
   WorkProject,
+  WorkProjectAssetRequest,
 } from "../../shared/api/types";
 import { ResourceModal } from "../../shared/components/ResourceModal";
 import {
   SANDBOX_CONTAINER_STATUS_COLOR,
   SANDBOX_CONTAINER_STATUS_LABEL,
+  SYSTEM_USER_ROLE_COLOR,
+  SYSTEM_USER_ROLE_LABEL,
+  WORK_PROJECT_ASSET_TYPE_LABEL,
   WORK_PROJECT_TYPE_LABEL,
 } from "../../shared/lib/labels";
 
@@ -30,22 +40,39 @@ type SelectedOption = {
   value?: SystemUser["id"];
 };
 
-const EMPTY: CreateWorkProjectRequest = {
+type AssetFormRow = WorkProjectAssetRequest & {
+  existing_id?: number;
+};
+
+type WorkProjectFormValues = Omit<CreateWorkProjectRequest, "assets"> & {
+  assets: AssetFormRow[];
+};
+
+const projectTypes = getWorkProjectTypes();
+const assetTypes = getWorkProjectAssetTypes();
+
+const EMPTY_ASSET: AssetFormRow = {
+  type: assetTypes[0],
+  path: "",
+  host: "",
+  port: null,
+};
+
+const EMPTY: WorkProjectFormValues = {
   name: "",
   description: "",
   owner_user_ids: [],
   sandbox_container_id: null,
-  assets_text: "",
-  type: "penetration_test",
+  assets: [{ ...EMPTY_ASSET }],
+  type: projectTypes[0],
 };
 
 export function WorkProjectFormModal({ open, saving, project, onCancel, onSubmit }: WorkProjectFormModalProps) {
-  const [values, setValues] = useState<CreateWorkProjectRequest>(EMPTY);
+  const [values, setValues] = useState<WorkProjectFormValues>(EMPTY);
   const [sandboxContainers, setSandboxContainers] = useState<SandboxContainer[]>([]);
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [sandboxLoading, setSandboxLoading] = useState(false);
   const [usersLoading, setUsersLoading] = useState(false);
-  const projectTypes = useMemo(() => getWorkProjectTypes(), []);
   const editing = Boolean(project);
 
   const loadSandboxContainers = useCallback(async () => {
@@ -79,9 +106,9 @@ export function WorkProjectFormModal({ open, saving, project, onCancel, onSubmit
       description: project.description,
       owner_user_ids: project.owner_user_ids,
       sandbox_container_id: project.sandbox_container_id ?? null,
-      assets_text: project.assets_text,
+      assets: project.assets.length ? project.assets.map(assetFromProject) : [{ ...EMPTY_ASSET }],
       type: project.type,
-    } : EMPTY);
+    } : { ...EMPTY, assets: [{ ...EMPTY_ASSET }] });
     void loadSandboxContainers();
     void loadUsers();
   }, [loadSandboxContainers, loadUsers, open, project]);
@@ -96,11 +123,30 @@ export function WorkProjectFormModal({ open, saving, project, onCancel, onSubmit
     value: container.id,
   })), [sandboxContainers]);
   const selectedSandbox = sandboxContainers.find((container) => container.id === values.sandbox_container_id);
+  const canSubmit = Boolean(values.name.trim()) && values.assets.length > 0
+    && values.assets.every(isAssetComplete);
+
+  const updateAsset = (index: number, patch: Partial<AssetFormRow>) => {
+    setValues((current) => ({
+      ...current,
+      assets: current.assets.map((asset, assetIndex) => (
+        assetIndex === index ? { ...asset, ...patch } : asset
+      )),
+    }));
+  };
+
+  const removeAsset = (index: number) => {
+    setValues((current) => ({
+      ...current,
+      assets: current.assets.filter((_, assetIndex) => assetIndex !== index),
+    }));
+  };
 
   const submit = () => onSubmit({
     ...values,
     name: values.name.trim(),
     description: values.description.trim(),
+    assets: values.assets.map(normalizeAsset).filter(isAssetComplete),
   });
 
   return (
@@ -109,7 +155,8 @@ export function WorkProjectFormModal({ open, saving, project, onCancel, onSubmit
       title={editing ? "Edit Work Project" : "Create Work Project"}
       saving={saving}
       submitLabel={editing ? "Save" : "Create"}
-      width={720}
+      submitDisabled={!canSubmit}
+      width={980}
       onCancel={onCancel}
       onSubmit={submit}
     >
@@ -173,15 +220,67 @@ export function WorkProjectFormModal({ open, saving, project, onCancel, onSubmit
         />
       </label>
 
-      <label>
-        <span>Assets</span>
-        <TextArea
-          className="project-assets-textarea"
-          value={values.assets_text}
-          maxLength={20000}
-          onChange={(assets_text) => setValues((v) => ({ ...v, assets_text }))}
-        />
-      </label>
+      <section className="project-assets-editor">
+        <header>
+          <span>Assets</span>
+          <Button
+            icon={<Plus size={14} />}
+            size="small"
+            theme="borderless"
+            onClick={() => setValues((v) => ({ ...v, assets: [...v.assets, { ...EMPTY_ASSET }] }))}
+          >
+            Add Asset
+          </Button>
+        </header>
+        <div className="project-assets-rows">
+          {values.assets.map((asset, index) => (
+            <article key={index} className="project-asset-row">
+              <label>
+                <span>Type</span>
+                <Select
+                  value={asset.type}
+                  disabled={Boolean(asset.existing_id)}
+                  optionList={assetTypes.map((type) => ({ label: WORK_PROJECT_ASSET_TYPE_LABEL[type], value: type }))}
+                  onChange={(type) => isWorkProjectAssetType(type) && updateAsset(index, resetAssetForType(type))}
+                />
+              </label>
+              {asset.type === WORK_PROJECT_ASSET_TYPE.BINARY ? (
+                <label className="project-asset-base-field">
+                  <span>Path</span>
+                  <Input
+                    value={asset.path}
+                    maxLength={500}
+                    disabled={Boolean(asset.existing_id)}
+                    required
+                    onChange={(path) => updateAsset(index, { path })}
+                  />
+                </label>
+              ) : (
+                <>
+                  <label>
+                    <span>{ASSET_HOST_FIELD_LABEL[asset.type]}</span>
+                    <Input value={asset.host} maxLength={255} onChange={(host) => updateAsset(index, { host })} />
+                  </label>
+                  {asset.type === WORK_PROJECT_ASSET_TYPE.SERVICE ? (
+                    <label>
+                      <span>Port</span>
+                      <InputNumber value={asset.port ?? undefined} min={1} max={65535} onChange={(port) => updateAsset(index, { port: typeof port === "number" ? port : null })} />
+                    </label>
+                  ) : null}
+                </>
+              )}
+              <Button
+                icon={<Trash2 size={14} />}
+                theme="borderless"
+                type="danger"
+                disabled={values.assets.length <= 1 || Boolean(asset.existing_id)}
+                aria-label="Remove asset"
+                onClick={() => removeAsset(index)}
+              />
+            </article>
+          ))}
+        </div>
+      </section>
     </ResourceModal>
   );
 }
@@ -191,7 +290,7 @@ function UserOption({ user }: { user: SystemUser }) {
     <div className="project-user-option">
       <span>{user.username}</span>
       <small>{user.email || "No email"}</small>
-      <Tag color={user.role === "admin" ? "red" : "blue"}>{user.role}</Tag>
+      <Tag color={SYSTEM_USER_ROLE_COLOR[user.role]}>{SYSTEM_USER_ROLE_LABEL[user.role]}</Tag>
     </div>
   );
 }
@@ -207,3 +306,41 @@ function SandboxContainerOption({ container }: { container: SandboxContainer }) 
     </div>
   );
 }
+
+function assetFromProject(asset: WorkProject["assets"][number]): AssetFormRow {
+  return {
+    existing_id: asset.id,
+    type: asset.type,
+    path: asset.path,
+    host: asset.host,
+    port: asset.port,
+  };
+}
+
+function normalizeAsset(asset: AssetFormRow): WorkProjectAssetRequest {
+  if (asset.type === WORK_PROJECT_ASSET_TYPE.BINARY) {
+    return { type: asset.type, path: asset.path.trim(), host: "", port: null };
+  }
+  return {
+    type: asset.type,
+    path: "",
+    host: asset.host.trim(),
+    port: asset.type === WORK_PROJECT_ASSET_TYPE.SERVICE ? asset.port : null,
+  };
+}
+
+function isAssetComplete(asset: WorkProjectAssetRequest): boolean {
+  if (asset.type === WORK_PROJECT_ASSET_TYPE.BINARY) return Boolean(asset.path.trim());
+  return Boolean(asset.host.trim());
+}
+
+function resetAssetForType(type: WorkProjectAssetRequest["type"]): Partial<AssetFormRow> {
+  return { type, path: "", host: "", port: null };
+}
+
+// Label for the `host` input field, which carries a different identifier per asset type.
+const ASSET_HOST_FIELD_LABEL: Record<Exclude<WorkProjectAssetRequest["type"], "binary">, string> = {
+  service: "Host",
+  domain: "Domain",
+  network: "Network (CIDR)",
+};

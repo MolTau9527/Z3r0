@@ -119,7 +119,7 @@ def build_subagent_tools(
             brief: str self-contained task brief for the subagent.
                 In WorkProject sessions, include the relevant task_id/task_title and instruct the subagent
                 to update its WorkProject summary immediately after findings, useful negative results,
-                blockers, evidence, decisions, or progress changes, before continuing to more tools when practical.
+                blockers, decisions, or progress changes, before continuing to more tools when practical.
 
         Returns:
             JSON status including run_id, agent_code, status, timestamps, and automatic completion resume guidance.
@@ -221,7 +221,7 @@ def build_subagent_tools(
                 f"{allowed_codes}; brief is a self-contained task brief. "
                 "Returns a persistent run id and resumes this agent automatically after the subagent finishes. "
                 "For WorkProject tasks, include task_id/task_title and require summary/progress updates after "
-                "findings, evidence, blockers, decisions, or progress changes."
+                "findings, blockers, decisions, or progress changes."
             ),
         ),
         function_tool(

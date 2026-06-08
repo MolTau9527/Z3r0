@@ -1,4 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { isSystemUserRole } from "../api/contract";
+import type { SystemUserRole } from "../api/types";
 import { clearStoredAccessToken, getStoredAccessToken, storeAccessToken } from "./session";
 
 type AuthContextValue = {
@@ -11,7 +13,7 @@ type AuthContextValue = {
 
 type AuthUser = {
   id: number;
-  role: "admin" | "user";
+  role: SystemUserRole;
   email: string;
   username: string;
 };
@@ -69,7 +71,7 @@ function decodeUser(token: string | null): AuthUser | null {
     const parsed = JSON.parse(atob(padded));
     if (
       typeof parsed.id === "number"
-      && (parsed.role === "admin" || parsed.role === "user")
+      && isSystemUserRole(parsed.role)
       && typeof parsed.email === "string"
       && typeof parsed.username === "string"
     ) {

@@ -1,5 +1,5 @@
 import { Button, Tooltip } from "@douyinfe/semi-ui";
-import { Activity, FolderOpen, Monitor, Plus, SquareTerminal } from "lucide-react";
+import { Activity, FolderKanban, FolderOpen, Monitor, Plus, SquareTerminal } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAdminHeaderActions } from "../../app/layouts/AdminLayout";
@@ -7,6 +7,7 @@ import { showApiError } from "../../shared/api/feedback";
 import { canOpenContainerNoVNC, queryAvailableSandboxContainers } from "../../shared/api/sandboxContainers";
 import type { AgentInputPart, SandboxContainer } from "../../shared/api/types";
 import { useContainerShell } from "../container-shell/ContainerShellProvider";
+import { WorkProjectInfoModal } from "../work-projects/WorkProjectInfoModal";
 import { useAgentSessionContext } from "./AgentSessionProvider";
 import { ChatStream } from "./ChatStream";
 import { Composer } from "./Composer";
@@ -35,7 +36,7 @@ const STATUS_LABEL: Record<string, string> = {
 export function PlaygroundPage() {
   const setHeaderActions = useAdminHeaderActions();
   const {
-    activeSessionId, selectSession,
+    activeSessionId, activeSessionSummary, selectSession,
     chatState, status, historyLoading, historyHasMore, historyPrepending, historyVersion,
     agents, defaultAgentCode, activeAgentCode, setActiveAgentCode,
     send, interrupt, cancelAll, loadPreviousHistory,
@@ -45,6 +46,7 @@ export function PlaygroundPage() {
   const [sandboxContainers, setSandboxContainers] = useState<SandboxContainer[]>([]);
   const [sandboxLoading, setSandboxLoading] = useState(false);
   const [sandboxContainerId, setSandboxContainerId] = useState<number | null>(null);
+  const [projectRecordsOpen, setProjectRecordsOpen] = useState(false);
   const { openFileManager, openNoVNC, openShell } = useContainerShell();
   const { selectedSubagent, setSelectedSubagent, subagentTabs, closeSubagentPanel } = useSubagentPanel(chatState, activeSessionId);
   const hasRunningSubagents = subagentTabs.some((tab) => tab.status === "running");
@@ -57,6 +59,10 @@ export function PlaygroundPage() {
   const shellUnavailableReason = getSandboxActionUnavailableReason(selectedSandboxContainer, { requiresHash: true });
   const screenUnavailableReason = getSandboxActionUnavailableReason(selectedSandboxContainer, { requiresNoVNC: true });
   const selectedSandboxName = selectedSandboxContainer?.container_name ?? "selected sandbox";
+  const activeProjectId = activeSessionSummary?.session_type === "project" ? activeSessionSummary.project_id ?? null : null;
+  const openProjectRecords = useCallback(() => {
+    setProjectRecordsOpen(true);
+  }, []);
 
   const openSelectedFileManager = useCallback(() => {
     if (selectedSandboxContainer) openFileManager(selectedSandboxContainer);
@@ -106,6 +112,15 @@ export function PlaygroundPage() {
         onChange={setSandboxContainerId}
       />
       <div className="sandbox-container-actions" aria-label="Selected sandbox actions">
+        {activeProjectId ? (
+          <SandboxActionButton
+            ariaLabel="Open project records"
+            disabled={false}
+            icon={<FolderKanban size={15} />}
+            tooltip="Project records"
+            onClick={openProjectRecords}
+          />
+        ) : null}
         <SandboxActionButton
           ariaLabel={`Open terminal for ${selectedSandboxName}`}
           disabled={Boolean(shellUnavailableReason)}
@@ -136,7 +151,7 @@ export function PlaygroundPage() {
         <span>{STATUS_LABEL[status] ?? "Idle"}</span>
       </span>
     </>
-  ), [openSelectedFileManager, openSelectedNoVNC, openSelectedShell, sandboxContainerId, sandboxContainers, sandboxLoading, screenUnavailableReason, selectSession, selectedSandboxName, shellUnavailableReason, status]);
+  ), [activeProjectId, openProjectRecords, openSelectedFileManager, openSelectedNoVNC, openSelectedShell, sandboxContainerId, sandboxContainers, sandboxLoading, screenUnavailableReason, selectSession, selectedSandboxName, shellUnavailableReason, status]);
 
   useLayoutEffect(() => {
     setHeaderActions(headerNode);
@@ -204,6 +219,13 @@ export function PlaygroundPage() {
           />
         </div>
       </div>
+      <WorkProjectInfoModal
+        open={projectRecordsOpen && Boolean(activeProjectId)}
+        project={null}
+        projectId={activeProjectId}
+        initialTab="assets"
+        onClose={() => setProjectRecordsOpen(false)}
+      />
     </div>
   );
 }

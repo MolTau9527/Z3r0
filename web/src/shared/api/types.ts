@@ -115,6 +115,20 @@ export type WorkProjectStatus = components["schemas"]["WorkProjectStatus"];
 export type WorkProjectType = components["schemas"]["WorkProjectType"];
 export type WorkProjectTaskStatus = components["schemas"]["WorkProjectTaskStatus"];
 export type WorkProjectAgentSummary = components["schemas"]["WorkProjectAgentSummarySchema"];
+export type WorkProjectAsset = components["schemas"]["WorkProjectAssetSchema"];
+export type WorkProjectAssetExtra = components["schemas"]["WorkProjectAssetExtraSchema"];
+export type WorkProjectAssetRequest = components["schemas"]["WorkProjectAssetRequest"];
+export type WorkProjectAssetType = components["schemas"]["WorkProjectAssetType"];
+export type WorkProjectAssetOrigin = components["schemas"]["WorkProjectAssetOrigin"];
+export type WorkProjectFinding = components["schemas"]["WorkProjectFindingSchema"];
+export type WorkProjectFindingSeverity = components["schemas"]["WorkProjectFindingSeverity"];
+export type WorkProjectFindingStatus = components["schemas"]["WorkProjectFindingStatus"];
+export type WorkProjectGraphEdge = components["schemas"]["WorkProjectGraphEdgeSchema"];
+export type WorkProjectGraphEdgeType = components["schemas"]["WorkProjectGraphEdgeType"];
+export type WorkProjectGraphSnapshot = components["schemas"]["WorkProjectGraphSnapshotSchema"];
+export type WorkProjectAttackPath = components["schemas"]["WorkProjectAttackPathSchema"];
+export type WorkProjectAttackPathStatus = components["schemas"]["WorkProjectAttackPathStatus"];
+export type WorkProjectAttackPathStep = components["schemas"]["WorkProjectAttackPathStepSchema"];
 
 export type CreateWorkProjectRequest = JsonRequestBody<paths["/api/work-projects"]["post"]>;
 export type CreateWorkProjectResponse = JsonResponse<paths["/api/work-projects"]["post"]>;
@@ -131,6 +145,17 @@ export type RetryWorkProjectResponse = JsonResponse<paths["/api/work-projects/{i
 export type ListWorkProjectSessionsResponse = JsonResponse<paths["/api/work-projects/{id}/sessions"]["get"]>;
 export type CreateWorkProjectSessionResponse = JsonResponse<paths["/api/work-projects/{id}/sessions"]["post"]>;
 export type DeleteWorkProjectSessionResponse = JsonResponse<paths["/api/work-projects/{id}/sessions/{session_id}"]["delete"]>;
+
+export type WorkProjectAssetsPathParams = PathParameters<paths["/api/work-projects/{project_id}/assets"]["get"]>;
+export type QueryWorkProjectAssetsParams = QueryParameters<paths["/api/work-projects/{project_id}/assets"]["get"]>;
+export type QueryWorkProjectAssetsResponse = JsonResponse<paths["/api/work-projects/{project_id}/assets"]["get"]>;
+
+export type WorkProjectFindingsPathParams = PathParameters<paths["/api/work-projects/{project_id}/findings"]["get"]>;
+export type QueryWorkProjectFindingsParams = QueryParameters<paths["/api/work-projects/{project_id}/findings"]["get"]>;
+export type QueryWorkProjectFindingsResponse = JsonResponse<paths["/api/work-projects/{project_id}/findings"]["get"]>;
+
+export type WorkProjectGraphPathParams = PathParameters<paths["/api/work-projects/{project_id}/graph"]["get"]>;
+export type GetWorkProjectGraphResponse = JsonResponse<paths["/api/work-projects/{project_id}/graph"]["get"]>;
 
 export type AgentSessionSummary = components["schemas"]["AgentSessionSummarySchema"];
 export type SessionType = components["schemas"]["SessionType"];

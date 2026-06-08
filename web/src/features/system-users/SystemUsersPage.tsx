@@ -10,7 +10,7 @@ import { usePagedResourceList } from "../../shared/hooks/usePagedResourceList";
 import { useResourceAction } from "../../shared/hooks/useResourceAction";
 import { useResourceSubmit } from "../../shared/hooks/useResourceSubmit";
 import { formatDateTime } from "../../shared/lib/date";
-import { SYSTEM_USER_ROLE_LABEL } from "../../shared/lib/labels";
+import { SYSTEM_USER_ROLE_COLOR, SYSTEM_USER_ROLE_LABEL } from "../../shared/lib/labels";
 import { UserFormModal } from "./UserFormModal";
 
 type ModalState = { mode: "create" } | { mode: "edit"; user: SystemUser } | null;
@@ -67,7 +67,7 @@ export function SystemUsersPage() {
     },
     {
       key: "role", header: "Role", width: "190px",
-      render: (user) => <Tag color={user.role === "admin" ? "red" : "blue"}>{SYSTEM_USER_ROLE_LABEL[user.role]}</Tag>,
+      render: (user) => <Tag color={SYSTEM_USER_ROLE_COLOR[user.role]}>{SYSTEM_USER_ROLE_LABEL[user.role]}</Tag>,
     },
     { key: "created", header: "Created", width: "minmax(150px, 1fr)", render: (u) => formatDateTime(u.created_at) },
     { key: "updated", header: "Updated", width: "minmax(150px, 1fr)", render: (u) => formatDateTime(u.updated_at) },

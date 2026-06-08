@@ -1,9 +1,11 @@
 import { Progress, Tag } from "@douyinfe/semi-ui";
 import { ClipboardList, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
-import type { WorkProject } from "../../shared/api/types";
+import { WORK_PROJECT_ASSET_TYPE } from "../../shared/api/contract";
+import type { WorkProject, WorkProjectAsset } from "../../shared/api/types";
 import { formatDateTime } from "../../shared/lib/date";
 import {
+  WORK_PROJECT_ASSET_TYPE_LABEL,
   WORK_PROJECT_STATUS_COLOR,
   WORK_PROJECT_STATUS_LABEL,
   WORK_PROJECT_TASK_STATUS_COLOR,
@@ -11,10 +13,6 @@ import {
   WORK_PROJECT_TYPE_COLOR,
   WORK_PROJECT_TYPE_LABEL,
 } from "../../shared/lib/labels";
-
-export function workProjectAssetLines(project: WorkProject): string[] {
-  return project.assets_text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-}
 
 export function workProjectOwnerNames(project: WorkProject): string {
   return project.owners.map((owner) => owner.username).join(", ") || "No owners";
@@ -31,9 +29,21 @@ export function WorkProjectStatusTag({ project }: { project: WorkProject }) {
 export function WorkProjectAssets({ project, className }: { project: WorkProject; className: string }) {
   return (
     <div className={className}>
-      {workProjectAssetLines(project).map((asset, index) => <div key={`${index}:${asset}`}>{asset}</div>)}
+      {project.assets.map((asset) => (
+        <div key={asset.id}>
+          <strong>{formatWorkProjectAsset(asset)}</strong>
+          <span>{WORK_PROJECT_ASSET_TYPE_LABEL[asset.type]}</span>
+        </div>
+      ))}
     </div>
   );
+}
+
+export function formatWorkProjectAsset(asset: WorkProjectAsset): string {
+  if (asset.type === WORK_PROJECT_ASSET_TYPE.BINARY) return asset.path || WORK_PROJECT_ASSET_TYPE_LABEL[asset.type];
+  const host = asset.host || WORK_PROJECT_ASSET_TYPE_LABEL[asset.type];
+  const port = asset.port ? `:${asset.port}` : "";
+  return `${host}${port}`;
 }
 
 export function WorkProjectTasks({
@@ -96,7 +106,6 @@ export function WorkProjectSummaries({
           <SummaryList className={blockClassName} label="Decisions" values={summary.summary?.decisions ?? []} />
           <SummaryList className={blockClassName} label="Blockers" values={summary.summary?.blockers ?? []} />
           <SummaryList className={blockClassName} label="Next Steps" values={summary.summary?.next_steps ?? []} />
-          <SummaryList className={blockClassName} label="Evidence" values={summary.summary?.evidence ?? []} />
           <SummaryBlock className={blockClassName} label="Notes" value={summary.summary?.notes} />
         </article>
       ))}

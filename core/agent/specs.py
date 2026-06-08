@@ -7,10 +7,20 @@ from core.tools.knowledge import create_knowledge, find_knowledge, load_knowledg
 from core.tools.work_project import (
     load_work_project_agent_summaries,
     load_work_project_metadata,
-    load_work_project_target_assets,
     load_work_project_tasks,
     update_work_project_agent_summary,
     update_work_project_tasks,
+)
+from core.tools.work_project_records import (
+    create_or_update_work_project_asset,
+    create_or_update_work_project_attack_path,
+    create_or_update_work_project_attack_path_step,
+    create_or_update_work_project_finding,
+    create_or_update_work_project_graph_edge,
+    delete_work_project_record,
+    list_work_project_assets,
+    list_work_project_findings,
+    load_work_project_graph,
 )
 from core.tools.sandbox import (
     cancel_sandbox_async_job,
@@ -49,10 +59,21 @@ KNOWLEDGE_TOOLS = (
 
 WORK_PROJECT_TOOLS = (
     ToolMount(load_work_project_metadata, requires_work_project=True),
-    ToolMount(load_work_project_target_assets, requires_work_project=True),
     ToolMount(load_work_project_tasks, requires_work_project=True),
     ToolMount(load_work_project_agent_summaries, requires_work_project=True),
     ToolMount(update_work_project_agent_summary, requires_work_project=True),
+)
+
+WORK_PROJECT_RECORD_TOOLS = (
+    ToolMount(list_work_project_assets, requires_work_project=True),
+    ToolMount(create_or_update_work_project_asset, requires_work_project=True),
+    ToolMount(list_work_project_findings, requires_work_project=True),
+    ToolMount(create_or_update_work_project_finding, requires_work_project=True),
+    ToolMount(load_work_project_graph, requires_work_project=True),
+    ToolMount(create_or_update_work_project_graph_edge, requires_work_project=True),
+    ToolMount(create_or_update_work_project_attack_path, requires_work_project=True),
+    ToolMount(create_or_update_work_project_attack_path_step, requires_work_project=True),
+    ToolMount(delete_work_project_record, requires_work_project=True),
 )
 
 SANDBOX_TOOLS = (
@@ -70,6 +91,7 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
         tools=(
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
+            *WORK_PROJECT_RECORD_TOOLS,
             ToolMount(update_work_project_tasks, requires_work_project=True),
         ),
         subagents=(
@@ -86,6 +108,7 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
             *SANDBOX_TOOLS,
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
+            *WORK_PROJECT_RECORD_TOOLS,
         ),
     ),
     AgentSpec(
@@ -94,6 +117,7 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
             *SANDBOX_TOOLS,
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
+            *WORK_PROJECT_RECORD_TOOLS,
         ),
     ),
     AgentSpec(
@@ -102,6 +126,7 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
             *SANDBOX_TOOLS,
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
+            *WORK_PROJECT_RECORD_TOOLS,
         ),
     ),
     AgentSpec(
@@ -110,6 +135,7 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
             *SANDBOX_TOOLS,
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
+            *WORK_PROJECT_RECORD_TOOLS,
         ),
     ),
     AgentSpec(
@@ -118,6 +144,7 @@ AGENT_SPECS: tuple[AgentSpec, ...] = (
             *SANDBOX_TOOLS,
             *KNOWLEDGE_TOOLS,
             *WORK_PROJECT_TOOLS,
+            *WORK_PROJECT_RECORD_TOOLS,
         ),
     ),
 )

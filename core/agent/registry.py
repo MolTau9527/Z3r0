@@ -136,6 +136,7 @@ class AgentRegistry:
                 graph.tool_snapshot.work_project_id is not None
                 and _has_work_project_tool(spec)
             ),
+            include_delegation_tools=bool(spec.subagents),
         )
 
         tools: list[Tool] = [

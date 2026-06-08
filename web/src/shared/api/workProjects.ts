@@ -9,13 +9,21 @@ import type {
   DeleteWorkProjectSessionResponse,
   DeleteWorkProjectResponse,
   GetWorkProjectResponse,
+  GetWorkProjectGraphResponse,
   ListWorkProjectSessionsResponse,
+  QueryWorkProjectAssetsParams,
+  QueryWorkProjectAssetsResponse,
+  QueryWorkProjectFindingsParams,
+  QueryWorkProjectFindingsResponse,
   QueryWorkProjectsParams,
   QueryWorkProjectsResponse,
   RetryWorkProjectPathParams,
   RetryWorkProjectResponse,
   UpdateWorkProjectMetadataRequest,
   UpdateWorkProjectMetadataResponse,
+  WorkProjectAssetsPathParams,
+  WorkProjectFindingsPathParams,
+  WorkProjectGraphPathParams,
   WorkProjectPathParams,
 } from "./types";
 
@@ -61,4 +69,26 @@ export function retryWorkProject(id: RetryWorkProjectPathParams["id"]) {
 
 export function deleteWorkProject(id: WorkProjectPathParams["id"]) {
   return apiDelete<DeleteWorkProjectResponse>(`${WORK_PROJECTS_PATH}/${id}`);
+}
+
+export function queryWorkProjectAssets(
+  projectId: WorkProjectAssetsPathParams["project_id"],
+  params: QueryWorkProjectAssetsParams,
+) {
+  return apiGet<QueryWorkProjectAssetsResponse>(
+    `${WORK_PROJECTS_PATH}/${projectId}/assets${buildQuery(params)}`,
+  );
+}
+
+export function queryWorkProjectFindings(
+  projectId: WorkProjectFindingsPathParams["project_id"],
+  params: QueryWorkProjectFindingsParams,
+) {
+  return apiGet<QueryWorkProjectFindingsResponse>(
+    `${WORK_PROJECTS_PATH}/${projectId}/findings${buildQuery(params)}`,
+  );
+}
+
+export function getWorkProjectGraph(projectId: WorkProjectGraphPathParams["project_id"]) {
+  return apiGet<GetWorkProjectGraphResponse>(`${WORK_PROJECTS_PATH}/${projectId}/graph`);
 }

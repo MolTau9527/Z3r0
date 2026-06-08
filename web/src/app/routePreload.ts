@@ -4,6 +4,7 @@ const routeLoaders = {
   protectedAdminShell: () => import("./layouts/ProtectedAdminShell"),
   playground: () => import("../features/playground/PlaygroundPage"),
   workProjects: () => import("../features/work-projects/WorkProjectsPage"),
+  workProjectWorkspace: () => import("../features/work-projects/WorkProjectWorkspacePage"),
   sandboxImages: () => import("../features/sandbox-images/SandboxImagesPage"),
   sandboxContainers: () => import("../features/sandbox-containers/SandboxContainersPage"),
   systemUsers: () => import("../features/system-users/SystemUsersPage"),
@@ -13,6 +14,7 @@ const routeLoaders = {
 const adminRouteLoaders: Record<string, () => Promise<unknown>> = {
   "/playground": routeLoaders.playground,
   "/work-projects": routeLoaders.workProjects,
+  "/work-projects/:projectId": routeLoaders.workProjectWorkspace,
   "/sandbox-images": routeLoaders.sandboxImages,
   "/sandbox-containers": routeLoaders.sandboxContainers,
   "/system-users": routeLoaders.systemUsers,
@@ -26,6 +28,7 @@ export const loadLoginPage = routeLoaders.login;
 export const loadProtectedAdminShell = routeLoaders.protectedAdminShell;
 export const loadPlaygroundPage = routeLoaders.playground;
 export const loadWorkProjectsPage = routeLoaders.workProjects;
+export const loadWorkProjectWorkspacePage = routeLoaders.workProjectWorkspace;
 export const loadSandboxImagesPage = routeLoaders.sandboxImages;
 export const loadSandboxContainersPage = routeLoaders.sandboxContainers;
 export const loadSystemUsersPage = routeLoaders.systemUsers;

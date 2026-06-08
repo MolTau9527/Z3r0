@@ -1171,6 +1171,58 @@
         "title": "CommonResponse[QuerySystemUsersResponse]",
         "type": "object"
       },
+      "CommonResponse_QueryWorkProjectAssetsResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueryWorkProjectAssetsResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[QueryWorkProjectAssetsResponse]",
+        "type": "object"
+      },
+      "CommonResponse_QueryWorkProjectFindingsResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueryWorkProjectFindingsResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[QueryWorkProjectFindingsResponse]",
+        "type": "object"
+      },
       "CommonResponse_QueryWorkProjectsResponse_": {
         "properties": {
           "code": {
@@ -1351,6 +1403,32 @@
           }
         },
         "title": "CommonResponse[UpdateInstanceConfigResponse]",
+        "type": "object"
+      },
+      "CommonResponse_WorkProjectGraphSnapshotSchema_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkProjectGraphSnapshotSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "CommonResponse[WorkProjectGraphSnapshotSchema]",
         "type": "object"
       },
       "CommonResponse_WorkProjectSchema_": {
@@ -1709,11 +1787,14 @@
       },
       "CreateWorkProjectRequest": {
         "properties": {
-          "assets_text": {
-            "default": "",
-            "maxLength": 20000,
-            "title": "Assets Text",
-            "type": "string"
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/WorkProjectAssetRequest"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Assets",
+            "type": "array"
           },
           "description": {
             "default": "",
@@ -1753,7 +1834,8 @@
           }
         },
         "required": [
-          "name"
+          "name",
+          "assets"
         ],
         "title": "CreateWorkProjectRequest",
         "type": "object"
@@ -2181,6 +2263,68 @@
           "items"
         ],
         "title": "QuerySystemUsersResponse",
+        "type": "object"
+      },
+      "QueryWorkProjectAssetsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkProjectAssetSchema"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page",
+          "size",
+          "total",
+          "items"
+        ],
+        "title": "QueryWorkProjectAssetsResponse",
+        "type": "object"
+      },
+      "QueryWorkProjectFindingsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkProjectFindingSchema"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page",
+          "size",
+          "total",
+          "items"
+        ],
+        "title": "QueryWorkProjectFindingsResponse",
         "type": "object"
       },
       "QueryWorkProjectsResponse": {
@@ -3292,11 +3436,14 @@
       },
       "UpdateWorkProjectMetadataRequest": {
         "properties": {
-          "assets_text": {
-            "default": "",
-            "maxLength": 20000,
-            "title": "Assets Text",
-            "type": "string"
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/WorkProjectAssetRequest"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Assets",
+            "type": "array"
           },
           "description": {
             "default": "",
@@ -3336,7 +3483,8 @@
           }
         },
         "required": [
-          "name"
+          "name",
+          "assets"
         ],
         "title": "UpdateWorkProjectMetadataRequest",
         "type": "object"
@@ -3417,15 +3565,6 @@
             },
             "maxItems": 64,
             "title": "Decisions",
-            "type": "array"
-          },
-          "evidence": {
-            "description": "Evidence references such as commands, files, URLs, logs, or artifacts.",
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 64,
-            "title": "Evidence",
             "type": "array"
           },
           "findings": {
@@ -3516,6 +3655,497 @@
         "title": "WorkProjectAgentSummarySchema",
         "type": "object"
       },
+      "WorkProjectAssetExtraSchema": {
+        "additionalProperties": false,
+        "description": "Recon metadata attached to an asset. Kept small on purpose.",
+        "properties": {
+          "banner": {
+            "default": "",
+            "maxLength": 512,
+            "title": "Banner",
+            "type": "string"
+          }
+        },
+        "title": "WorkProjectAssetExtraSchema",
+        "type": "object"
+      },
+      "WorkProjectAssetOrigin": {
+        "enum": [
+          "scope",
+          "discovered"
+        ],
+        "title": "WorkProjectAssetOrigin",
+        "type": "string"
+      },
+      "WorkProjectAssetRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "extra": {
+            "$ref": "#/components/schemas/WorkProjectAssetExtraSchema"
+          },
+          "host": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Host",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Path",
+            "type": "string"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "type": {
+            "$ref": "#/components/schemas/WorkProjectAssetType"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "WorkProjectAssetRequest",
+        "type": "object"
+      },
+      "WorkProjectAssetSchema": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_agent_code": {
+            "default": "",
+            "title": "Created By Agent Code",
+            "type": "string"
+          },
+          "created_from_session_id": {
+            "default": "",
+            "title": "Created From Session Id",
+            "type": "string"
+          },
+          "extra": {
+            "$ref": "#/components/schemas/WorkProjectAssetExtraSchema"
+          },
+          "host": {
+            "default": "",
+            "title": "Host",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "identifier": {
+            "title": "Identifier",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/WorkProjectAssetOrigin"
+          },
+          "path": {
+            "default": "",
+            "title": "Path",
+            "type": "string"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          },
+          "type": {
+            "$ref": "#/components/schemas/WorkProjectAssetType"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "type",
+          "origin",
+          "identifier",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkProjectAssetSchema",
+        "type": "object"
+      },
+      "WorkProjectAssetType": {
+        "enum": [
+          "service",
+          "domain",
+          "network",
+          "binary"
+        ],
+        "title": "WorkProjectAssetType",
+        "type": "string"
+      },
+      "WorkProjectAttackPathSchema": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_agent_code": {
+            "default": "",
+            "title": "Created By Agent Code",
+            "type": "string"
+          },
+          "created_from_session_id": {
+            "default": "",
+            "title": "Created From Session Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkProjectAttackPathStatus"
+          },
+          "summary": {
+            "default": "",
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "title",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkProjectAttackPathSchema",
+        "type": "object"
+      },
+      "WorkProjectAttackPathStatus": {
+        "enum": [
+          "suspected",
+          "validated",
+          "blocked",
+          "closed"
+        ],
+        "title": "WorkProjectAttackPathStatus",
+        "type": "string"
+      },
+      "WorkProjectAttackPathStepSchema": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_agent_code": {
+            "default": "",
+            "title": "Created By Agent Code",
+            "type": "string"
+          },
+          "created_from_session_id": {
+            "default": "",
+            "title": "Created From Session Id",
+            "type": "string"
+          },
+          "edge_id": {
+            "title": "Edge Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "path_id": {
+            "title": "Path Id",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "path_id",
+          "sequence",
+          "edge_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkProjectAttackPathStepSchema",
+        "type": "object"
+      },
+      "WorkProjectFindingSchema": {
+        "properties": {
+          "asset_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_agent_code": {
+            "default": "",
+            "title": "Created By Agent Code",
+            "type": "string"
+          },
+          "created_from_session_id": {
+            "default": "",
+            "title": "Created From Session Id",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "edge_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edge Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "impact": {
+            "default": "",
+            "title": "Impact",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/WorkProjectFindingSeverity"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkProjectFindingStatus"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "validated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validated At"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "title",
+          "severity",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkProjectFindingSchema",
+        "type": "object"
+      },
+      "WorkProjectFindingSeverity": {
+        "enum": [
+          "info",
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "title": "WorkProjectFindingSeverity",
+        "type": "string"
+      },
+      "WorkProjectFindingStatus": {
+        "enum": [
+          "suspected",
+          "validated",
+          "false_positive"
+        ],
+        "title": "WorkProjectFindingStatus",
+        "type": "string"
+      },
+      "WorkProjectGraphEdgeSchema": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_agent_code": {
+            "default": "",
+            "title": "Created By Agent Code",
+            "type": "string"
+          },
+          "created_from_session_id": {
+            "default": "",
+            "title": "Created From Session Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "integer"
+          },
+          "source_asset_id": {
+            "title": "Source Asset Id",
+            "type": "integer"
+          },
+          "target_asset_id": {
+            "title": "Target Asset Id",
+            "type": "integer"
+          },
+          "type": {
+            "$ref": "#/components/schemas/WorkProjectGraphEdgeType"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "source_asset_id",
+          "target_asset_id",
+          "type",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkProjectGraphEdgeSchema",
+        "type": "object"
+      },
+      "WorkProjectGraphEdgeType": {
+        "enum": [
+          "related",
+          "resolves_to",
+          "hosts",
+          "connects_to",
+          "trusts",
+          "exploits",
+          "pivots_to",
+          "leads_to"
+        ],
+        "title": "WorkProjectGraphEdgeType",
+        "type": "string"
+      },
+      "WorkProjectGraphSnapshotSchema": {
+        "properties": {
+          "attack_path_steps": {
+            "items": {
+              "$ref": "#/components/schemas/WorkProjectAttackPathStepSchema"
+            },
+            "title": "Attack Path Steps",
+            "type": "array"
+          },
+          "attack_paths": {
+            "items": {
+              "$ref": "#/components/schemas/WorkProjectAttackPathSchema"
+            },
+            "title": "Attack Paths",
+            "type": "array"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/WorkProjectGraphEdgeSchema"
+            },
+            "title": "Edges",
+            "type": "array"
+          }
+        },
+        "required": [
+          "edges",
+          "attack_paths",
+          "attack_path_steps"
+        ],
+        "title": "WorkProjectGraphSnapshotSchema",
+        "type": "object"
+      },
       "WorkProjectOwnerSchema": {
         "properties": {
           "id": {
@@ -3547,9 +4177,12 @@
             "title": "Agent Summaries",
             "type": "array"
           },
-          "assets_text": {
-            "title": "Assets Text",
-            "type": "string"
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/WorkProjectAssetSchema"
+            },
+            "title": "Assets",
+            "type": "array"
           },
           "can_cancel": {
             "default": false,
@@ -3645,7 +4278,7 @@
           "description",
           "owner_user_ids",
           "owners",
-          "assets_text",
+          "assets",
           "tasks",
           "agent_summaries",
           "status",
@@ -7423,6 +8056,243 @@
         "summary": "Delete Work Project Session Route",
         "tags": [
           "work-projects"
+        ]
+      }
+    },
+    "/api/work-projects/{project_id}/assets": {
+      "get": {
+        "operationId": "query_work_project_assets_route_api_work_projects__project_id__assets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Keyword",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_QueryWorkProjectAssetsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Query Work Project Assets Route",
+        "tags": [
+          "work-project-assets"
+        ]
+      }
+    },
+    "/api/work-projects/{project_id}/findings": {
+      "get": {
+        "operationId": "query_work_project_findings_route_api_work_projects__project_id__findings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Keyword",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_QueryWorkProjectFindingsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Query Work Project Findings Route",
+        "tags": [
+          "work-project-findings"
+        ]
+      }
+    },
+    "/api/work-projects/{project_id}/graph": {
+      "get": {
+        "operationId": "get_work_project_graph_snapshot_route_api_work_projects__project_id__graph_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_WorkProjectGraphSnapshotSchema_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse_Any_"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get Work Project Graph Snapshot Route",
+        "tags": [
+          "work-project-graph"
         ]
       }
     }

@@ -15,6 +15,13 @@ from model.agent.sessions import AgentSessionMeta
 from model.sandbox.containers import SandboxContainer
 from model.sandbox.images import SandboxImage
 from model.system_user.users import SystemUser
+from model.work_project.assets import WorkProjectAsset
+from model.work_project.findings import WorkProjectFinding
+from model.work_project.graph import (
+    WorkProjectAttackPath,
+    WorkProjectAttackPathStep,
+    WorkProjectGraphEdge,
+)
 from model.work_project.projects import WorkProject, WorkProjectOwner
 from utils.sdk_tables import BOOTSTRAP_SESSION_ID
 
@@ -24,6 +31,8 @@ logger = get_logger(__name__)
 # registered so SQLModel.metadata picks every table up at create_all time
 _registered_models = [
     SystemUser, SandboxImage, SandboxContainer, WorkProject, WorkProjectOwner,
+    WorkProjectAsset, WorkProjectFinding,
+    WorkProjectGraphEdge, WorkProjectAttackPath, WorkProjectAttackPathStep,
     AgentSessionMeta, AgentMessageMeta, AgentContextCompaction,
     AgentSubordinateTask, AgentNotification, SandboxAsyncJob, AgentEventLog,
 ]

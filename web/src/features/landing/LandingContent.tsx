@@ -56,8 +56,8 @@ const architectureNodes: ArchitectureNode[] = [
     detail: "The operator defines the assessment objective, authorization boundary, sandbox context, and review expectations.",
     points: [
       "Starts authorized assessment, audit, validation, or research work from the browser.",
-      "Reviews streamed reasoning, evidence, tool output, and final assessment records.",
-      "Can manually review shell, screen, and files when evidence needs human verification.",
+      "Reviews streamed reasoning, tool output, and final assessment records.",
+      "Can manually review shell, screen, and files when a finding needs human verification.",
     ],
     icon: Fingerprint,
   },
@@ -135,13 +135,13 @@ const architectureNodes: ArchitectureNode[] = [
   },
   {
     id: "record",
-    label: "Assessment Record",
+    label: "WorkProject Records",
     role: "Review Layer",
-    detail: "The persisted record connects conclusions to streamed events, tool evidence, subagent output, and durable facts.",
+    detail: "Project-scoped records persist assets, findings, relationship edges, and attack paths outside model context.",
     points: [
-      "Keeps messages, metadata, delegated jobs, async command results, notifications, timeline events, and stable facts reviewable.",
-      "Supports live refresh, resumed reviews, and post-assessment review.",
-      "Helps operators distinguish confirmed findings, assumptions, residual risk, and next actions.",
+      "Keeps assets, findings, relationship edges, and ordered attack paths reviewable.",
+      "Supports live refresh, resumed reviews, and post-assessment reconstruction from stable records.",
+      "Keeps durable facts out of summaries so agent context remains compact.",
     ],
     icon: FileCheck2,
   },
@@ -185,10 +185,10 @@ const architectureNodes: ArchitectureNode[] = [
     id: "store",
     label: "PostgreSQL Store",
     role: "Persistence Layer",
-    detail: "PostgreSQL stores sessions, messages, metadata, delegated jobs, async command jobs, notification obligations, event logs, sandbox records, users, and work projects.",
+    detail: "PostgreSQL stores sessions, messages, metadata, delegated jobs, async command jobs, notification obligations, event logs, sandbox records, users, work projects, and project security records.",
     points: [
       "Persists long-running assessments across browser refreshes and runtime recovery.",
-      "Stores subagent task state, async job state, completion obligations, and review metadata.",
+      "Stores subagent task state, async job state, completion obligations, assets, findings, relationship edges, and attack paths.",
       "Provides the durable source for replay, compaction, and operational audit.",
     ],
     icon: Database,
@@ -291,6 +291,7 @@ const highlights = [
   ["Session-level Agent Graph", "Roles, tools, knowledge, and subagents are bound dynamically for each assessment session."],
   ["Self-healing Delegation Drivers", "Specialist work can go dormant, recover from stale state, cancel live or dormant runs, and avoid hot relaunch loops."],
   ["Durable Timeline Replay", "Persisted UI events use stable seq values and item keys, so replay no longer reconstructs transcript state from SDK messages."],
+  ["First-class WorkProject Records", "Project sessions persist assets, findings, relationship edges, and attack paths as structured review objects."],
   ["Viewer-specific Projection", "Agents share persisted history while receiving context scoped to their responsibility."],
   ["Long-context Compaction", "Earlier history is summarized while recent context and durable facts remain available."],
   ["Stable Streaming Contract", "Frontend event schemas stay independent from model SDK internals."],
@@ -316,19 +317,15 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
           <div className="landing-title-row">
             <img className="landing-hero-logo" src={logoSrc} width="1000" height="1000" alt="Z3r0 logo" />
             <div>
-              <h1>Z3r0 Multi-Agent Security Workbench</h1>
+              <h1>Multi-Agent Security Workbench</h1>
               <p>
-                A controlled multi-agent workbench for authorized security assessments,
-                code auditing, internal review, and controlled research.
+                A controlled multi-agent workbench for authorized security assessment,
+                code auditing, finding-backed validation, attack-path replay, and controlled research.
               </p>
             </div>
           </div>
           <div className="landing-actions">
             <PrimaryActionLink action={primaryAction} />
-            <a className="landing-action-link landing-action-secondary" href="#architecture">
-              <Network size={17} />
-              <span>View architecture</span>
-            </a>
             <a className="landing-action-link landing-action-secondary" href={repositoryUrl} target="_blank" rel="noopener noreferrer">
               <GitBranch size={17} />
               <span>Follow us</span>
@@ -339,7 +336,8 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
         <div className="landing-capability-matrix" aria-label="Z3r0 capability matrix">
           <div className="landing-capability-header">
             <span className="page-eyebrow">Operating Model</span>
-            <strong>Coordinator-led work with specialist execution and review paths.</strong>
+            <strong>Coordinator-led work with</strong>
+            <strong>specialist execution, durable records, and review paths.</strong>
           </div>
           <div className="landing-capability-disclaimer">
             <div className="landing-boundary-heading">
@@ -380,7 +378,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
         <div className="landing-section-heading">
           <span className="page-eyebrow">Architecture</span>
           <h2 id="architecture-title">Layered architecture for governed agent operations.</h2>
-          <p>Z3r0 separates the user-facing surface, API boundary, runtime orchestration, async instance drivers, session agent graph, controlled execution, model access, notification-backed liveness, timeline replay, and persisted assessment records.</p>
+          <p>Z3r0 separates the user-facing surface, API boundary, runtime orchestration, async instance drivers, session agent graph, controlled execution, model access, notification-backed liveness, timeline replay, and persisted WorkProject records.</p>
         </div>
 
         <div className="landing-architecture-layout">

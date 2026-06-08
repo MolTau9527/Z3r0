@@ -48,7 +48,7 @@ async def update_work_project_metadata_handler(
 ) -> CommonResponse:
     if not await work_project_exists(id):
         return CommonResponse(code=HTTPStatus.NOT_FOUND.value, message="work project not found")
-    validation_error = await validate_work_project_metadata(request)
+    validation_error = await validate_work_project_metadata(request, project_id=id)
     if validation_error:
         return CommonResponse(code=HTTPStatus.BAD_REQUEST.value, message=validation_error)
     project = await update_work_project_metadata(id, request)
