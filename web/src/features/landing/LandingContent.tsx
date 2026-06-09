@@ -52,21 +52,21 @@ type ArchitectureNode = {
 const architectureNodes: ArchitectureNode[] = [
   {
     id: "operator",
-    label: "Authorized Operator",
-    role: "Authorized Entry",
-    detail: "The operator defines the assessment objective, authorization boundary, sandbox context, and review expectations.",
+    label: "Authorized Red-Team Operator",
+    role: "Scoped Entry",
+    detail: "The operator defines the red-team objective, authorization boundary, target scope, sandbox context, and review expectations.",
     points: [
-      "Starts authorized assessment, audit, validation, or research work from the browser.",
-      "Reviews streamed reasoning, tool output, and final assessment records.",
+      "Starts authorized penetration testing, vulnerability research, audit, or validation work from the browser.",
+      "Reviews streamed reasoning, tool output, and final evidence records.",
       "Can manually review shell, screen, and files when a finding needs human verification.",
     ],
     icon: Fingerprint,
   },
   {
     id: "workbench",
-    label: "React Workbench",
+    label: "React Red-Team Workbench",
     role: "Presentation Layer",
-    detail: "The workbench is the user-facing surface for sessions, resource management, event streams, and sandbox review.",
+    detail: "The workbench is the user-facing surface for red-team sessions, resource management, event streams, and sandbox review.",
     points: [
       "Renders normalized thinking, text, tool, and subagent events in real time.",
       "Provides session lists, agent selection, sandbox binding, shell, files, and noVNC views.",
@@ -81,7 +81,7 @@ const architectureNodes: ArchitectureNode[] = [
     detail: "The API layer owns authentication, resource contracts, WebSocket entry points, and service boundaries.",
     points: [
       "Exposes REST resources for users, work projects, sandbox images, containers, agents, and sessions.",
-      "Routes WebSocket turns into the active session pool and streams normalized events back to the frontend.",
+      "Routes red-team turns into the active session pool and streams normalized events back to the frontend.",
       "Keeps request validation and response shaping outside the agent runtime.",
     ],
     icon: Braces,
@@ -130,18 +130,18 @@ const architectureNodes: ArchitectureNode[] = [
     points: [
       "Binds the coordinator and specialist agents to the current session.",
       "Mounts command tools only when an authorized running sandbox is available.",
-      "Keeps specialist delegation, knowledge, and tool access scoped to the assessment context.",
+      "Keeps specialist delegation, knowledge, and tool access scoped to the authorized red-team context.",
     ],
     icon: GitBranch,
   },
   {
     id: "record",
-    label: "WorkProject Records",
+    label: "WorkProject Evidence Records",
     role: "Review Layer",
     detail: "Project-scoped records persist assets, findings, relationship edges, and attack paths outside model context.",
     points: [
       "Keeps assets, findings, relationship edges, and ordered attack paths reviewable.",
-      "Supports live refresh, resumed reviews, and post-assessment reconstruction from stable records.",
+      "Supports live refresh, resumed reviews, and post-engagement reconstruction from stable records.",
       "Keeps durable facts out of summaries so agent context remains compact.",
     ],
     icon: FileCheck2,
@@ -188,7 +188,7 @@ const architectureNodes: ArchitectureNode[] = [
     role: "Persistence Layer",
     detail: "PostgreSQL stores sessions, messages, metadata, delegated jobs, async command jobs, notification obligations, event logs, sandbox records, users, work projects, and project security records.",
     points: [
-      "Persists long-running assessments across browser refreshes and runtime recovery.",
+      "Persists long-running red-team work across browser refreshes and runtime recovery.",
       "Stores subagent task state, async job state, completion obligations, assets, findings, relationship edges, and attack paths.",
       "Provides the durable source for replay, compaction, and operational audit.",
     ],
@@ -218,8 +218,8 @@ const agents = [
     name: "Z3r0",
     role: "Chief Security Officer",
     capability: "Coordination",
-    direction: "Assessment planning, delegation, and synthesis",
-    detail: "Task decomposition, team coordination, and result integration.",
+    direction: "Red-team planning, delegation, and evidence synthesis",
+    detail: "Task decomposition, specialist coordination, and result integration.",
     accent: "red",
     icon: Workflow,
   },
@@ -237,9 +237,9 @@ const agents = [
     code: "cie",
     name: "L1ly",
     role: "Chief Intelligence Engineer",
-    capability: "Intelligence",
-    direction: "Authorized asset context and relationship analysis",
-    detail: "Intelligence collection, asset mapping, and relationship analysis.",
+    capability: "Reconnaissance",
+    direction: "Asset discovery, enrichment, and relationship mapping",
+    detail: "Reconnaissance, asset discovery, and relationship analysis.",
     accent: "red",
     icon: FileSearch,
   },
@@ -248,8 +248,8 @@ const agents = [
     name: "Fr4nk",
     role: "Chief Penetration Engineer",
     capability: "Validation",
-    direction: "Authorized validation and risk verification",
-    detail: "Penetration testing, vulnerability validation, and risk verification.",
+    direction: "Authorized exploitation validation and impact verification",
+    detail: "Penetration testing, vulnerability validation, and impact verification.",
     accent: "cyan",
     icon: ShieldCheck,
   },
@@ -276,9 +276,9 @@ const agents = [
 ];
 
 const runtimeSteps = [
-  { title: "Start", text: "AgentSessionPool creates or resumes a session and launches the owning instance driver.", icon: Layers3 },
+  { title: "Start", text: "AgentSessionPool creates or resumes a red-team session and launches the owning instance driver.", icon: Layers3 },
   { title: "Drain", text: "run_until_idle executes the initial turn and every claimable PENDING notification for that instance.", icon: Activity },
-  { title: "Dispatch", text: "Subagents and async sandbox commands register AWAITING obligations, then the driver stops while they run.", icon: Database },
+  { title: "Dispatch", text: "Specialist agents and async sandbox commands register AWAITING obligations, then the driver stops while they run.", icon: Database },
   { title: "Terminal", text: "execute_async_command ends the current turn immediately, so agents cannot poll a running job.", icon: SquareTerminal },
   { title: "Resume", text: "Completed or failed background work flips the obligation to PENDING and wakes the owning instance.", icon: Zap },
   { title: "Replay", text: "Timeline events are stamped with seq values and item keys so refreshes read the same frames as live streams.", icon: FileSearch },
@@ -287,21 +287,26 @@ const runtimeSteps = [
 const evidenceFlow = [
   {
     title: "Authorized Scope",
-    text: "Declared assets, owners, sandbox binding, and assessment objective define the operating boundary.",
+    text: "Targets, owners, sandbox binding, and red-team objectives define the operating boundary before execution.",
     icon: Fingerprint,
   },
   {
-    title: "Specialist Work",
-    text: "Coordinator and specialist agents execute through scoped tools, knowledge, and controlled sandboxes.",
+    title: "Specialist Agents",
+    text: "A coordinator delegates reconnaissance, validation, audit, reverse, and cryptography work to role-scoped experts.",
     icon: Workflow,
   },
   {
-    title: "Structured Evidence",
-    text: "Assets, findings, relationship edges, and attack paths are stored as WorkProject records.",
+    title: "Sandboxed Tooling",
+    text: "Commands, files, GUI tooling, skills, and manual review stay inside the selected Docker sandbox.",
+    icon: SquareTerminal,
+  },
+  {
+    title: "Evidence Records",
+    text: "Assets, findings, relationship edges, and attack paths are stored as WorkProject-owned records.",
     icon: FileCheck2,
   },
   {
-    title: "Reviewable Chain",
+    title: "Replayable Review",
     text: "Timeline replay, graph views, and record tabs keep validation and handoff independent from model context.",
     icon: GitBranch,
   },
@@ -312,10 +317,10 @@ const highlights = [
   ["Notification-backed Liveness", "Subagent tasks and sandbox jobs register AWAITING obligations atomically, then wake owners through PENDING notifications."],
   ["Turn-terminal Commands", "Long sandbox commands end the current agent turn immediately, preventing polling loops and preserving a single resume path."],
   ["Interruptible Runtime", "The task runtime races SDK streams against notifications while deferring interruption until pending tool calls reach a safe point."],
-  ["Session Agent Graph", "Roles, tools, knowledge, subagents, model settings, sandbox state, and WorkProject state are assembled per session."],
+  ["Session Agent Graph", "Roles, tools, knowledge, specialist agents, model settings, sandbox state, and WorkProject state are assembled per session."],
   ["Recoverable Delegation", "Specialist work can go dormant, resume after child work completes, cancel cleanly, and avoid hot relaunch loops."],
   ["Durable Timeline Replay", "Persisted UI events use stable seq values and item keys, so live streaming and replay share the same event contract."],
-  ["WorkProject Evidence Records", "Project sessions persist scope assets, discovered assets, findings, relationship edges, and attack paths as structured review data."],
+  ["WorkProject Evidence Records", "Project sessions persist scoped targets, discovered assets, findings, relationship edges, and attack paths as structured review data."],
   ["Scoped Context Projection", "Agents share persisted history while receiving role-appropriate context views that filter private tool traces."],
   ["Long-context Compaction", "Earlier projected history is summarized while recent context and durable facts remain available for continuation."],
   ["Generated Frontend Contracts", "Frontend types and enum constants are regenerated from backend schema instead of manually maintained in feature code."],
@@ -341,10 +346,11 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
           <div className="landing-title-row">
             <img className="landing-hero-logo" src={logoSrc} width="1000" height="1000" alt="Z3r0 logo" />
             <div>
-              <h1>AI-Native Security Assessment Workbench</h1>
+              <h1>AI-Native</h1>
+              <h1>Red-Team Workbench</h1>
               <p>
-                An AI-native workbench for authorized security assessment, code audit,
-                controlled execution, structured evidence, and replayable review.
+                AI-native red-team workbench for authorized penetration testing and vulnerability
+                research, with specialist agents, sandboxed tooling, evidence records, and replayable timelines.
               </p>
             </div>
           </div>
@@ -359,8 +365,8 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
 
         <div className="landing-capability-matrix" aria-label="Z3r0 capability matrix">
           <div className="landing-capability-header">
-            <span className="page-eyebrow">Operating Model</span>
-            <strong>Coordinator-led assessment with specialist execution, durable evidence, and explicit review paths.</strong>
+            <span className="page-eyebrow">Red-Team Operating Model</span>
+            <strong>Coordinator-led penetration testing and vulnerability research with specialist execution, durable evidence, and replayable review paths.</strong>
           </div>
           <div className="landing-capability-disclaimer">
             <div className="landing-boundary-heading">
@@ -400,8 +406,8 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
       <section id="architecture" className="landing-section landing-architecture" aria-labelledby="architecture-title">
         <div className="landing-section-heading">
           <span className="page-eyebrow">Architecture</span>
-          <h2 id="architecture-title">Layered architecture for governed agent operations.</h2>
-          <p>Z3r0 separates the workbench, API boundary, runtime orchestration, resumable drivers, session agent graph, controlled execution, model access, notification-backed liveness, timeline replay, and persisted WorkProject evidence records.</p>
+          <h2 id="architecture-title">Layered architecture for authorized red-team operations.</h2>
+          <p>Z3r0 separates the workbench, API boundary, runtime orchestration, resumable drivers, session agent graph, sandboxed execution, model access, notification-backed liveness, timeline replay, and persisted WorkProject evidence records.</p>
         </div>
 
         <div className="landing-architecture-layout">
@@ -422,7 +428,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
             <div className="landing-architecture-layer" aria-label="Execution and model layer">
               <div className="landing-layer-title">
                 <span>Execution</span>
-                <strong>Tools, sandbox, and models are mounted behind runtime authorization.</strong>
+                <strong>Tools, sandboxes, and models are mounted behind runtime authorization.</strong>
               </div>
               <div className="landing-layer-grid landing-layer-grid-execution">
                 {executionLayerNodes.map((node) => (
@@ -434,7 +440,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
             <div className="landing-architecture-layer landing-architecture-layer-foundation" aria-label="Persistence and streaming layer">
               <div className="landing-layer-title">
                 <span>Foundation</span>
-                <strong>Notification obligations, stable events, and durable storage keep long assessments recoverable.</strong>
+                <strong>Notification obligations, stable events, and durable storage keep long red-team work recoverable.</strong>
               </div>
               <div className="landing-layer-grid landing-layer-grid-foundation">
                 {foundationLayerNodes.map((node) => (
@@ -468,7 +474,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
       <section id="agents" className="landing-section" aria-labelledby="agents-title">
         <div className="landing-section-heading">
           <span className="page-eyebrow">Agent Team</span>
-          <h2 id="agents-title">A lead security role coordinates specialists across the assessment lifecycle.</h2>
+          <h2 id="agents-title">A lead security role coordinates specialists across the red-team lifecycle.</h2>
         </div>
         <div className="landing-agent-grid">
           {agents.map((agent) => (
@@ -488,7 +494,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
         <div className="landing-section-heading">
           <span className="page-eyebrow">Evidence Chain</span>
           <h2 id="evidence-title">Durable records keep findings reviewable after the model context changes.</h2>
-          <p>Agent output is useful only when it can be traced to scope, evidence, relationships, and review state. WorkProject records turn transient analysis into structured data owned by the application.</p>
+          <p>Agent output is useful only when it can be traced to authorized scope, evidence, relationships, and review state. WorkProject records turn transient red-team analysis into structured data owned by the application.</p>
         </div>
         <div className="landing-evidence-flow" aria-label="Z3r0 evidence chain">
           {evidenceFlow.map(({ icon: Icon, title, text }, index) => (
@@ -505,7 +511,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
       <section id="runtime" className="landing-section landing-runtime" aria-labelledby="runtime-title">
         <div className="landing-section-heading">
           <span className="page-eyebrow">Runtime Flow</span>
-          <h2 id="runtime-title">Async drivers keep long assessments resumable without polling or blocking on background work.</h2>
+          <h2 id="runtime-title">Async drivers keep long red-team work resumable without polling or blocking on background work.</h2>
         </div>
 
         <div className="landing-runtime-track">
@@ -538,7 +544,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
       <section className="landing-section landing-highlights" aria-labelledby="highlights-title">
         <div className="landing-section-heading">
           <span className="page-eyebrow">Technical Characteristics</span>
-          <h2 id="highlights-title">Implementation boundaries that make agent work recoverable, auditable, and contract-driven.</h2>
+          <h2 id="highlights-title">Implementation boundaries that make agent-assisted red-team work recoverable, auditable, and contract-driven.</h2>
         </div>
         <div className="landing-highlight-grid">
           {highlights.map(([title, text], index) => (
@@ -556,7 +562,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
       <section id="security" className="landing-section landing-security" aria-labelledby="security-title">
         <div className="landing-section-heading">
           <span className="page-eyebrow">Operational Boundary</span>
-          <h2 id="security-title">Built for authorized assessments in controlled environments.</h2>
+          <h2 id="security-title">Built for authorized red-team work in controlled environments.</h2>
           <p>Use Z3r0 where sandbox execution, Docker access, file operations, and model credentials can be governed as high-privilege assets.</p>
         </div>
         <div className="landing-boundary">
@@ -565,8 +571,9 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
             <h3>Trusted deployment required</h3>
           </div>
           <p>
-            Z3r0 is intended for authorized security assessment, code auditing,
-            internal review, controlled research, and training environments. Network access,
+            Z3r0 is intended for authorized red-team operations, penetration testing,
+            vulnerability research, security assessment, code auditing, internal review,
+            controlled research, and training environments. Network access,
             sandbox containers, terminal access, file management, and model
             credentials should remain isolated and trusted. Users must define and
             follow an explicit authorization scope before using any tool capability.

@@ -15,22 +15,24 @@
   <a href="QUICKSTART.md">Quickstart</a>
 </p>
 
+<p align="center">
+  <strong>AI-native red-team workbench for authorized penetration testing and vulnerability research, with specialist agents, sandboxed tooling, evidence records, and replayable timelines.</strong>
+</p>
+
 ---
 
 > :warning: **Legal Notice**
 >
 > **This project may be used only within a lawful and explicitly authorized scope for security testing, assessment, and research. Any unauthorized, unlawful, or harmful use is strictly prohibited. The author assumes no responsibility for any consequences, losses, damages, legal liabilities, or unlawful acts caused by users.**
 >
-> This project is provided only for authorized security assessment, code auditing, internal review, and controlled research. It does not grant permission to test, access, scan, or affect any third-party system, network, service, account, or data. Users are solely responsible for obtaining and preserving authorization, defining scope, and complying with applicable laws, contracts, and authorization boundaries.
+> This project is provided only for authorized red-team operations, penetration testing, vulnerability research, security assessment, code auditing, internal review, and controlled research. It does not grant permission to test, access, scan, or affect any third-party system, network, service, account, or data. Users are solely responsible for obtaining and preserving authorization, defining scope, and complying with applicable laws, contracts, and authorization boundaries.
 
-Z3r0 is an AI-native security assessment workbench for authorized environments. It combines a coordinator-led agent team, specialist execution, Docker-backed tooling, durable evidence records, and replayable timelines so planning, discovery, validation, relationship mapping, attack-path reconstruction, and human review stay in one governed workflow.
-
-The project is built around a simple operating premise: agents may assist with analysis and execution, but durable facts must be structured, scoped, auditable, and reviewable outside the model context. WorkProject records preserve assets, findings, relationship edges, and attack paths as application-owned data, while the runtime keeps long-running agent work resumable through notification obligations instead of polling loops or blocking drivers.
+Z3r0 is an AI-native red-team workbench for authorized penetration testing and vulnerability research. It coordinates specialist agents across reconnaissance, vulnerability validation, attack-path analysis, code audit, reverse engineering, and cryptographic review, while running tools through bound Docker sandboxes and preserving assets, findings, relationships, and attack paths as durable evidence records.
 
 ## Design Principles
 
 - **Authorization before automation**: every workflow assumes an explicit legal scope, controlled targets, and operator accountability before any tool capability is used.
-- **Role-governed execution**: the coordinator owns decomposition and synthesis; specialist agents handle intelligence, penetration validation, code audit, reverse engineering, and cryptographic review within scoped responsibilities.
+- **Role-governed red-team execution**: the coordinator owns decomposition and synthesis; specialist agents handle reconnaissance, vulnerability validation, code audit, reverse engineering, and cryptographic review within scoped responsibilities.
 - **Structured evidence over transient context**: durable WorkProject records persist assets, findings, relationship edges, and attack paths outside model context so evidence remains reviewable after the conversation changes.
 - **Resumable long-running work**: notification obligations model background subagent work and sandbox jobs, allowing drivers to stop cleanly and resume only when integration work is ready.
 - **Controlled execution boundary**: command execution, browser workflows, file management, GUI tooling, and skills run through bound Docker sandboxes rather than the application host.
@@ -40,18 +42,18 @@ The project is built around a simple operating premise: agents may assist with a
 
 ```mermaid
 flowchart TB
-  Operator["Authorized Operator"]
-  Workbench["React Workbench<br/>Presentation Layer"]
+  Operator["Authorized Red-Team Operator"]
+  Workbench["React Red-Team Workbench<br/>Presentation Layer"]
   API["FastAPI API<br/>API Layer"]
   Runtime["Agent Runtime<br/>Orchestration Layer"]
   Drivers["Instance Drivers<br/>Async Scheduling Layer"]
   Notifications["Notification Obligations<br/>Liveness Layer"]
   Graph["Session Agent Graph<br/>Capability Layer"]
   Timeline["Timeline Event Log<br/>Replay Layer"]
-  Record["WorkProject Records<br/>Review Layer"]
-  Evidence["Evidence Chain<br/>Assets / Findings / Paths"]
+  Record["WorkProject Evidence Records<br/>Review Layer"]
+  Evidence["Evidence Chain<br/>Assets / Findings / Attack Paths"]
   Sandbox["Docker Sandbox<br/>Execution Layer"]
-  Tools["Tool Surface<br/>Tool Layer"]
+  Tools["Sandbox Tool Surface<br/>Tool Layer"]
   Models["Model Providers<br/>Model Layer"]
   Events["Event Contract<br/>Streaming Layer"]
   Store[("PostgreSQL Store<br/>Persistence Layer")]
@@ -78,20 +80,20 @@ flowchart TB
   Events --> Workbench
 ```
 
-The system is organized into explicit layers: user-facing workbench, API boundary, runtime orchestration, resumable instance drivers, notification-backed liveness, session agent graph, controlled execution, model access, streaming event contract, durable timeline replay, and persisted WorkProject evidence records. The backend owns authentication, session lifecycle, context projection, event normalization, delegation, sandbox binding, tool mounting, notification obligations, persistence, project-scoped records, and history compaction. The frontend consumes stable REST and WebSocket contracts and does not depend on model SDK or provider internals.
+The system is organized into explicit layers: user-facing red-team workbench, API boundary, runtime orchestration, resumable instance drivers, notification-backed liveness, session agent graph, controlled execution, model access, streaming event contract, durable timeline replay, and persisted WorkProject evidence records. The backend owns authentication, session lifecycle, context projection, event normalization, delegation, sandbox binding, tool mounting, notification obligations, persistence, project-scoped records, and history compaction. The frontend consumes stable REST and WebSocket contracts and does not depend on model SDK or provider internals.
 
 ### Value Model
 
 ```mermaid
 flowchart LR
-  Scope["Authorized Scope<br/>assets, owners, sandbox"] --> Agents["Role-scoped Agents<br/>coordinator + specialists"]
-  Agents --> Tools["Controlled Tools<br/>sandbox, knowledge, skills"]
-  Tools --> Evidence["Structured Evidence<br/>assets, findings, edges, paths"]
+  Scope["Authorized Red-Team Scope<br/>targets, owners, sandbox"] --> Agents["Specialist Agent Team<br/>coordinator + experts"]
+  Agents --> Tools["Sandboxed Tooling<br/>commands, files, GUI, skills"]
+  Tools --> Evidence["Evidence Records<br/>assets, findings, edges, paths"]
   Evidence --> Review["Human Review<br/>workspace, graph, replay"]
-  Review --> Continuity["Continuity<br/>resume, audit, report-ready data"]
+  Review --> Continuity["Continuity<br/>resume, audit, handoff records"]
 ```
 
-This value chain keeps high-risk security work operationally bounded. Scope is declared before execution, agents work through explicit tools, tool output is distilled into structured records, and reviewers can inspect the resulting graph and timeline without relying on hidden model state.
+This value chain keeps red-team and vulnerability research work operationally bounded. Scope is declared before execution, agents work through explicit tools, tool output is distilled into structured evidence, and reviewers can inspect the resulting graph and timeline without relying on hidden model state.
 
 ## Agent Team
 
@@ -99,8 +101,8 @@ This value chain keeps high-risk security work operationally bounded. Scope is d
 | --- | --- | --- | --- |
 | `cso` | Z3r0 | Chief Security Officer | Task decomposition, coordination, result integration |
 | `cae` | V3ra | Chief Audit Engineer | Source code audit, dependency review, remediation verification |
-| `cie` | L1ly | Chief Intelligence Engineer | Intelligence collection, asset mapping, relationship analysis |
-| `cpe` | Fr4nk | Chief Penetration Engineer | Penetration testing, vulnerability validation, risk verification |
+| `cie` | L1ly | Chief Intelligence Engineer | Reconnaissance, asset discovery, relationship mapping |
+| `cpe` | Fr4nk | Chief Penetration Engineer | Penetration testing, vulnerability validation, impact verification |
 | `cre` | J4m3 | Chief Reverse Engineer | File, binary, firmware, and APK reverse engineering |
 | `cce` | Nu1L | Chief Cryptography Engineer | Protocol review, key management, cryptographic implementation analysis |
 
@@ -108,8 +110,8 @@ This value chain keeps high-risk security work operationally bounded. Scope is d
 flowchart TB
   CSO["cso / Z3r0"]
   CSO --> CAE["cae / V3ra<br/>Code Audit"]
-  CSO --> CIE["cie / L1ly<br/>Intelligence"]
-  CSO --> CPE["cpe / Fr4nk<br/>Penetration"]
+  CSO --> CIE["cie / L1ly<br/>Reconnaissance"]
+  CSO --> CPE["cpe / Fr4nk<br/>Validation"]
   CSO --> CRE["cre / J4m3<br/>Reverse"]
   CSO --> CCE["cce / Nu1L<br/>Cryptography"]
 
@@ -337,7 +339,7 @@ Open `http://127.0.0.1:8000`.
 
 ## Security Boundary
 
-Z3r0 is intended only for authorized security assessment, code auditing, internal review, and research or training environments. The project does not authorize access to any third-party target and must not be used for unauthorized or unlawful activity. Sandbox containers, the Docker socket, terminal access, file management, and model credentials are high-privilege assets and should be used only in trusted, isolated environments.
+Z3r0 is intended only for authorized red-team operations, penetration testing, vulnerability research, security assessment, code auditing, internal review, and research or training environments. The project does not authorize access to any third-party target and must not be used for unauthorized or unlawful activity. Sandbox containers, the Docker socket, terminal access, file management, and model credentials are high-privilege assets and should be used only in trusted, isolated environments.
 
 Users must define and follow an explicit authorization scope before using any tool capability. The author is not responsible for any consequence, loss, damage, legal liability, or unlawful act caused by user activity.
 
