@@ -22,6 +22,9 @@ from service.work_project.progress import calculate_work_project_progress, deriv
 async def load_work_project_metadata(ctx: RunContextWrapper[AgentRuntimeContext]) -> str:
     """Load metadata for the WorkProject bound to the current session.
 
+    Args:
+        None.
+
     Returns:
         JSON status with project id, name, description, sandbox id, status, and type.
     """
@@ -35,6 +38,9 @@ async def load_work_project_metadata(ctx: RunContextWrapper[AgentRuntimeContext]
 async def load_work_project_tasks(ctx: RunContextWrapper[AgentRuntimeContext]) -> str:
     """Load the shared task list for the WorkProject bound to the current session.
 
+    Args:
+        None.
+
     Returns:
         JSON status with project_id, code-calculated overall progress, and shared task records.
     """
@@ -47,6 +53,9 @@ async def load_work_project_tasks(ctx: RunContextWrapper[AgentRuntimeContext]) -
 @function_tool
 async def load_work_project_agent_summaries(ctx: RunContextWrapper[AgentRuntimeContext]) -> str:
     """Load all agent summary slots for the WorkProject bound to the current session.
+
+    Args:
+        None.
 
     Returns:
         JSON status with project_id and structured summaries written by participating agents.
@@ -239,5 +248,3 @@ def _sync_summary_progress_to_task(
 def _recalculate_project_progress(project: WorkProject) -> None:
     project.progress = calculate_work_project_progress(project.tasks)
     project.status = derive_work_project_status(project.tasks, project.status)
-
-

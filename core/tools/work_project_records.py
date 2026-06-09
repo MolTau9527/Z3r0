@@ -51,13 +51,37 @@ class WorkProjectRecordType(StrEnum):
 
 
 @function_tool
-async def list_work_project_assets(ctx: RunContextWrapper[AgentRuntimeContext], keyword: str = "") -> str:
-    """List durable Asset records for the current WorkProject."""
+async def list_work_project_assets(
+    ctx: RunContextWrapper[AgentRuntimeContext],
+    keyword: str = "",
+    page: int = 1,
+) -> str:
+    """List durable Asset records for the current WorkProject.
+
+    Results are paginated to keep model context small. Increase page to continue reading when total exceeds size.
+
+    Args:
+        keyword: str optional search term matched against asset identifier, host, path, or type.
+        page: int one-based result page. Use page > 1 when total exceeds size.
+
+    Returns:
+        JSON status with page, size, total, and compact asset records.
+    """
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No WorkProject is bound to this session.")
-    page = await query_work_project_assets(project_id, page=1, size=_AGENT_PAGE_SIZE, keyword=keyword)
-    return work_project_success({"assets": [_compact_asset(item.model_dump(mode="json")) for item in page.items]})
+    page_result = await query_work_project_assets(
+        project_id,
+        page=_agent_page(page),
+        size=_AGENT_PAGE_SIZE,
+        keyword=keyword,
+    )
+    return work_project_success({
+        "page": page_result.page,
+        "size": page_result.size,
+        "total": page_result.total,
+        "assets": [_compact_asset(item.model_dump(mode="json")) for item in page_result.items],
+    })
 
 
 @function_tool
@@ -73,6 +97,14 @@ async def create_or_update_work_project_asset(
     service/domain/network require host (port is optional for service); binary requires path.
     Put a short recon banner in extra; keep it small and reference large output from a finding instead.
     Asset origin (scope vs discovered) is managed by the system and is not settable here.
+    Scope asset identity is managed by project metadata; when updating a scope asset, keep type/host/port/path unchanged.
+
+    Args:
+        asset_id: int | None asset id to update. Use null to upsert by normalized (type, identifier).
+        asset: WorkProjectAssetRequest containing type plus host/port/path and optional extra.banner.
+
+    Returns:
+        JSON status with the compact saved asset record.
     """
     project_id = _project_id(ctx)
     if project_id is None:
@@ -92,13 +124,37 @@ async def create_or_update_work_project_asset(
 
 
 @function_tool
-async def list_work_project_findings(ctx: RunContextWrapper[AgentRuntimeContext], keyword: str = "") -> str:
-    """List durable Finding records for the current WorkProject."""
+async def list_work_project_findings(
+    ctx: RunContextWrapper[AgentRuntimeContext],
+    keyword: str = "",
+    page: int = 1,
+) -> str:
+    """List durable Finding records for the current WorkProject.
+
+    Results are paginated to keep model context small. Increase page to continue reading when total exceeds size.
+
+    Args:
+        keyword: str optional search term matched against finding title, description, impact, severity, or status.
+        page: int one-based result page. Use page > 1 when total exceeds size.
+
+    Returns:
+        JSON status with page, size, total, and compact finding records.
+    """
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No WorkProject is bound to this session.")
-    page = await query_work_project_findings(project_id, page=1, size=_AGENT_PAGE_SIZE, keyword=keyword)
-    return work_project_success({"findings": [_compact_finding(item.model_dump(mode="json")) for item in page.items]})
+    page_result = await query_work_project_findings(
+        project_id,
+        page=_agent_page(page),
+        size=_AGENT_PAGE_SIZE,
+        keyword=keyword,
+    )
+    return work_project_success({
+        "page": page_result.page,
+        "size": page_result.size,
+        "total": page_result.total,
+        "findings": [_compact_finding(item.model_dump(mode="json")) for item in page_result.items],
+    })
 
 
 @function_tool
@@ -113,6 +169,13 @@ async def create_or_update_work_project_finding(
     When a finding substantiates a relationship or attack step, set edge_id to that graph edge.
     status is one of suspected, validated, false_positive; the finding's description and impact
     carry the proof, so mark it validated only once it is actually confirmed.
+
+    Args:
+        finding_id: int | None finding id to update. Use null to create a new finding.
+        finding: WorkProjectFindingRequest with asset_id/edge_id, title, severity, status, description, and impact.
+
+    Returns:
+        JSON status with the compact saved finding record.
     """
     project_id = _project_id(ctx)
     if project_id is None:
@@ -132,24 +195,40 @@ async def create_or_update_work_project_finding(
 
 
 @function_tool
-async def load_work_project_graph(ctx: RunContextWrapper[AgentRuntimeContext]) -> str:
+async def load_work_project_graph(
+    ctx: RunContextWrapper[AgentRuntimeContext],
+    page: int = 1,
+) -> str:
     """Load durable relationship edges, attack paths, and ordered path steps.
 
     Graph nodes are the project assets; edges connect two assets. Use list_work_project_assets for node detail.
+    Results are paginated to keep model context small. Increase page to continue reading when a total exceeds size.
+
+    Args:
+        page: int one-based graph page. Applies separately to edges, attack paths, and attack path steps.
+
+    Returns:
+        JSON status with total counts, page, size, compact edges, compact attack paths, and compact path steps.
     """
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No WorkProject is bound to this session.")
     snapshot = await get_work_project_graph_snapshot(project_id)
+    page = _agent_page(page)
     return work_project_success({
         "counts": {
             "edges": len(snapshot.edges),
             "attack_paths": len(snapshot.attack_paths),
             "attack_path_steps": len(snapshot.attack_path_steps),
         },
-        "edges": [_compact_edge(item.model_dump(mode="json")) for item in snapshot.edges[:_AGENT_GRAPH_ITEMS]],
-        "attack_paths": [_compact_attack_path(item.model_dump(mode="json")) for item in snapshot.attack_paths[:_AGENT_GRAPH_ITEMS]],
-        "attack_path_steps": [_compact_attack_path_step(item.model_dump(mode="json")) for item in snapshot.attack_path_steps[:_AGENT_GRAPH_ITEMS]],
+        "page": page,
+        "size": _AGENT_GRAPH_ITEMS,
+        "edges": [_compact_edge(item.model_dump(mode="json")) for item in _page_slice(snapshot.edges, page, _AGENT_GRAPH_ITEMS)],
+        "attack_paths": [_compact_attack_path(item.model_dump(mode="json")) for item in _page_slice(snapshot.attack_paths, page, _AGENT_GRAPH_ITEMS)],
+        "attack_path_steps": [
+            _compact_attack_path_step(item.model_dump(mode="json"))
+            for item in _page_slice(snapshot.attack_path_steps, page, _AGENT_GRAPH_ITEMS)
+        ],
     })
 
 
@@ -165,6 +244,13 @@ async def create_or_update_work_project_graph_edge(
     The edge type is either structural (related, resolves_to, hosts, connects_to, trusts) to describe the
     target architecture, or offensive (exploits, pivots_to, leads_to) to describe how an attack progresses,
     directed from source_asset_id to target_asset_id.
+
+    Args:
+        edge_id: int | None graph edge id to update. Use null to upsert by source_asset_id, target_asset_id, and type.
+        edge: WorkProjectGraphEdgeRequest with source_asset_id, target_asset_id, type, and optional label.
+
+    Returns:
+        JSON status with the compact saved graph edge record.
     """
     project_id = _project_id(ctx)
     if project_id is None:
@@ -189,7 +275,15 @@ async def create_or_update_work_project_attack_path(
     path_id: int | None,
     path: WorkProjectAttackPathRequest,
 ) -> str:
-    """Create or update a durable attack path for the current WorkProject."""
+    """Create or update a durable attack path for the current WorkProject.
+
+    Args:
+        path_id: int | None attack path id to update. Use null to create a new attack path.
+        path: WorkProjectAttackPathRequest with title, status, and summary.
+
+    Returns:
+        JSON status with the compact saved attack path record.
+    """
     project_id = _project_id(ctx)
     if project_id is None:
         return work_project_error("No WorkProject is bound to this session.")
@@ -217,6 +311,14 @@ async def create_or_update_work_project_attack_path_step(
     """Create or update one ordered attack path step.
 
     Each step traverses a single relationship edge (edge_id), in order by sequence.
+
+    Args:
+        path_id: int parent attack path id.
+        step_id: int | None attack path step id to update. Use null to create a new step.
+        step: WorkProjectAttackPathStepRequest with sequence and edge_id.
+
+    Returns:
+        JSON status with the compact saved attack path step record.
     """
     project_id = _project_id(ctx)
     if project_id is None:
@@ -247,7 +349,16 @@ async def delete_work_project_record(
 
     record_type selects the record kind; record_id is that record's id.
     For an attack_path_step, also provide path_id. Deleting an asset removes the edges that touch it
-    and detaches findings; deleting an edge removes the steps that traverse it and detaches findings.
+    and detaches findings; scope assets cannot be deleted here and must be removed from project metadata.
+    Deleting an edge removes the steps that traverse it and detaches findings.
+
+    Args:
+        record_type: WorkProjectRecordType record kind to delete: asset, finding, graph_edge, attack_path, or attack_path_step.
+        record_id: int id of the selected record.
+        path_id: int | None parent attack path id, required only when record_type is attack_path_step.
+
+    Returns:
+        JSON status with the deleted record type and id.
     """
     project_id = _project_id(ctx)
     if project_id is None:
@@ -273,10 +384,18 @@ def _project_id(ctx: RunContextWrapper[AgentRuntimeContext]) -> int | None:
     return ctx.context.work_project_id
 
 
+def _agent_page(page: int) -> int:
+    return page if page > 0 else 1
+
+
+def _page_slice(items: list, page: int, size: int) -> list:
+    start = (page - 1) * size
+    return items[start:start + size]
+
+
 def _compact_asset(item: dict) -> dict:
     compact = _pick(item, (
         "id", "type", "origin", "identifier", "host", "port", "path",
-        "created_by_agent_code", "created_from_session_id",
     ))
     banner = (item.get("extra") or {}).get("banner")
     if banner:

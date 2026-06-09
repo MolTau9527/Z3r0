@@ -1,6 +1,6 @@
-import { Empty, Tag } from "@douyinfe/semi-ui";
-import { FileText } from "lucide-react";
-import { useMemo } from "react";
+import { Empty, TabPane, Tabs, Tag } from "@douyinfe/semi-ui";
+import { Boxes, Bug, FileText, Network, Route } from "lucide-react";
+import { useMemo, type ReactNode } from "react";
 import { WORK_PROJECT_ASSET_TYPE } from "../../shared/api/contract";
 import type {
   WorkProjectAsset,
@@ -22,7 +22,47 @@ import {
   WORK_PROJECT_FINDING_STATUS_LABEL,
 } from "../../shared/lib/labels";
 import { ProjectGraphCanvas } from "./ProjectGraphCanvas";
+import type { ProjectRecordTab, WorkProjectRecords } from "./workProjectRecords";
 import { formatWorkProjectAsset } from "./workProjectView";
+
+type WorkProjectRecordTabsProps = {
+  records: WorkProjectRecords;
+  activeTab?: ProjectRecordTab;
+  className?: string;
+  onActiveTabChange?: (tab: ProjectRecordTab) => void;
+};
+
+export function WorkProjectRecordTabs({
+  records,
+  activeTab,
+  className = "project-record-tabs",
+  onActiveTabChange,
+}: WorkProjectRecordTabsProps) {
+  return (
+    <Tabs
+      type="line"
+      className={className}
+      activeKey={activeTab}
+      onChange={(key) => {
+        const tab = projectRecordTabFromKey(key);
+        if (tab) onActiveTabChange?.(tab);
+      }}
+    >
+      <TabPane tab={<TabLabel icon={<Boxes size={14} />} text="Assets" />} itemKey="assets">
+        <AssetList assets={records.assets} />
+      </TabPane>
+      <TabPane tab={<TabLabel icon={<Bug size={14} />} text="Findings" />} itemKey="findings">
+        <FindingList findings={records.findings} assets={records.assets} />
+      </TabPane>
+      <TabPane tab={<TabLabel icon={<Route size={14} />} text="Attack Paths" />} itemKey="attack-paths">
+        <AttackPathList assets={records.assets} graph={records.graph} />
+      </TabPane>
+      <TabPane tab={<TabLabel icon={<Network size={14} />} text="Graph" />} itemKey="graph">
+        <GraphView assets={records.assets} graph={records.graph} />
+      </TabPane>
+    </Tabs>
+  );
+}
 
 export function AssetList({ assets }: { assets: WorkProjectAsset[] }) {
   if (!assets.length) return <RecordEmpty title="No assets." />;
@@ -156,6 +196,17 @@ function RecordExtension({ items }: { items: Array<[string, string | undefined]>
 
 function RecordEmpty({ title }: { title: string }) {
   return <Empty className="empty-state project-record-empty" image={<FileText size={42} />} title={title} description="" />;
+}
+
+function TabLabel({ icon, text }: { icon: ReactNode; text: string }) {
+  return <span className="workspace-tab-label">{icon}{text}</span>;
+}
+
+function projectRecordTabFromKey(key: string): ProjectRecordTab | null {
+  if (key === "assets" || key === "findings" || key === "attack-paths" || key === "graph") {
+    return key;
+  }
+  return null;
 }
 
 function groupSteps(steps: WorkProjectAttackPathStep[]) {

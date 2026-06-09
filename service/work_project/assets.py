@@ -18,6 +18,8 @@ from service.work_project.graph import purge_edges_touching_asset
 
 
 _ASSET_ALREADY_EXISTS = "asset already exists"
+_SCOPE_ASSET_IDENTITY_LOCKED = "scope asset identity is managed by project metadata"
+_SCOPE_ASSET_DELETE_LOCKED = "scope assets are managed by project metadata"
 
 
 async def query_work_project_assets(
@@ -91,10 +93,18 @@ async def update_work_project_asset(
         asset = await session.get(WorkProjectAsset, asset_id)
         if asset is None or asset.project_id != project_id:
             return None, "asset not found"
+        if (
+            asset.origin == WorkProjectAssetOrigin.SCOPE
+            and (asset.type, asset.identifier) != request.identity
+        ):
+            return None, _SCOPE_ASSET_IDENTITY_LOCKED
         conflict = await _get_asset_by_identity(session, project_id, request.type, request.identifier)
         if conflict is not None and conflict.id != asset_id:
             return None, _ASSET_ALREADY_EXISTS
+        previous_extra = asset.extra
         apply_asset_request(asset, request, now)
+        if "extra" not in request.model_fields_set:
+            asset.extra = previous_extra
         session.add(asset)
         try:
             await session.commit()
@@ -114,9 +124,9 @@ async def upsert_work_project_asset(
 ) -> tuple[WorkProjectAssetSchema | None, str]:
     async with get_async_session() as session:
         existing = await _get_asset_by_identity(session, project_id, request.type, request.identifier)
-        existing_id = existing.id if existing is not None else None
-    if existing_id is not None:
-        return await update_work_project_asset(project_id, existing_id, request)
+        existing_asset_id = existing.id if existing is not None else None
+    if existing_asset_id is not None:
+        return await update_work_project_asset(project_id, existing_asset_id, request)
     saved, error = await create_work_project_asset(
         project_id,
         request,
@@ -139,6 +149,8 @@ async def delete_work_project_asset(project_id: int, asset_id: int) -> str:
         asset = await session.get(WorkProjectAsset, asset_id)
         if asset is None or asset.project_id != project_id:
             return "asset not found"
+        if asset.origin == WorkProjectAssetOrigin.SCOPE:
+            return _SCOPE_ASSET_DELETE_LOCKED
         await session.execute(
             update(WorkProjectFinding)
             .where(WorkProjectFinding.asset_id == asset_id)

@@ -1,11 +1,13 @@
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { workProjectEdgeCategory, type WorkProjectGraphEdgeCategory } from "../../shared/api/contract";
 import {
+  WORK_PROJECT_ASSET_TYPE,
   WORK_PROJECT_ASSET_TYPES,
   WORK_PROJECT_GRAPH_EDGE_CATEGORIES,
-} from "../../shared/api/generated/constants";
+  workProjectEdgeCategory,
+  type WorkProjectGraphEdgeCategory,
+} from "../../shared/api/contract";
 import type { WorkProjectAsset, WorkProjectAssetType, WorkProjectGraphEdge } from "../../shared/api/types";
 import {
   WORK_PROJECT_ASSET_ORIGIN_LABEL,
@@ -18,10 +20,10 @@ import { formatWorkProjectAsset } from "./workProjectView";
 // Visual encoding. Keyed by the contract enums so a new asset type / edge category
 // fails the build here until it is given a color, instead of silently falling back.
 const ASSET_TYPE_COLOR: Record<WorkProjectAssetType, string> = {
-  service: "#2f6fed",
-  domain: "#0d9aa8",
-  network: "#7c5cff",
-  binary: "#e08a13",
+  [WORK_PROJECT_ASSET_TYPE.SERVICE]: "#2f6fed",
+  [WORK_PROJECT_ASSET_TYPE.DOMAIN]: "#0d9aa8",
+  [WORK_PROJECT_ASSET_TYPE.NETWORK]: "#7c5cff",
+  [WORK_PROJECT_ASSET_TYPE.BINARY]: "#e08a13",
 };
 
 const EDGE_CATEGORY_COLOR: Record<WorkProjectGraphEdgeCategory, string> = {
@@ -313,7 +315,7 @@ function nodeRows(asset: WorkProjectAsset): { title: string; items: Array<[strin
   const items: Array<[string, string | undefined]> = [
     ["Type", WORK_PROJECT_ASSET_TYPE_LABEL[asset.type]],
     ["Origin", WORK_PROJECT_ASSET_ORIGIN_LABEL[asset.origin]],
-    asset.type === "binary" ? ["Path", asset.path] : ["Host", asset.host],
+    asset.type === WORK_PROJECT_ASSET_TYPE.BINARY ? ["Path", asset.path] : ["Host", asset.host],
     ["Port", asset.port ? String(asset.port) : undefined],
     ["Banner", asset.extra?.banner],
   ];
@@ -473,4 +475,3 @@ function clamp(value: number, min: number, max: number): number {
 function truncate(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 }
-

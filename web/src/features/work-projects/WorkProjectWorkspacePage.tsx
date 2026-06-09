@@ -1,12 +1,11 @@
-import { Button, Empty, Spin, TabPane, Tabs } from "@douyinfe/semi-ui";
-import { ArrowLeft, Boxes, Bug, FileText, Network, Route } from "lucide-react";
+import { Button, Empty, Spin } from "@douyinfe/semi-ui";
+import { ArrowLeft, FileText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { showApiError } from "../../shared/api/feedback";
 import type { WorkProject } from "../../shared/api/types";
 import { MetricStrip } from "../../shared/components/ResourcePageShell";
-import { AssetList, AttackPathList, FindingList, GraphView } from "./ProjectRecordViews";
+import { WorkProjectRecordTabs } from "./ProjectRecordViews";
 import {
   EMPTY_WORK_PROJECT_RECORDS,
   loadWorkProjectRecordSnapshot,
@@ -77,25 +76,8 @@ export function WorkProjectWorkspacePage() {
       <MetricStrip metrics={metrics} />
 
       <Spin spinning={loading}>
-        <Tabs className="workspace-tabs" type="line">
-          <TabPane tab={<TabLabel icon={<Boxes size={14} />} text="Assets" />} itemKey="assets">
-            <AssetList assets={records.assets} />
-          </TabPane>
-          <TabPane tab={<TabLabel icon={<Bug size={14} />} text="Findings" />} itemKey="findings">
-            <FindingList findings={records.findings} assets={records.assets} />
-          </TabPane>
-          <TabPane tab={<TabLabel icon={<Route size={14} />} text="Attack Paths" />} itemKey="attack-paths">
-            <AttackPathList assets={records.assets} graph={records.graph} />
-          </TabPane>
-          <TabPane tab={<TabLabel icon={<Network size={14} />} text="Graph" />} itemKey="graph">
-            <GraphView assets={records.assets} graph={records.graph} />
-          </TabPane>
-        </Tabs>
+        <WorkProjectRecordTabs records={records} className="workspace-tabs" />
       </Spin>
     </section>
   );
-}
-
-function TabLabel({ icon, text }: { icon: ReactNode; text: string }) {
-  return <span className="workspace-tab-label">{icon}{text}</span>;
 }

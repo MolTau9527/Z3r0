@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import String, cast, func, or_
+from sqlalchemy import String, cast, func, or_, update
 from sqlmodel import select
 
 from core.agent.constants import DEFAULT_AGENT_CODE
@@ -11,6 +11,7 @@ from logger import get_logger
 from model.agent.sessions import AgentSessionMeta
 from model.sandbox.containers import SandboxContainer
 from model.system_user.users import SystemUser
+from model.work_project.findings import WorkProjectFinding
 from model.work_project.projects import WorkProject, WorkProjectOwner
 from model.work_project.assets import WorkProjectAsset
 from schema.agent.sessions import AgentSessionSummarySchema, SessionType
@@ -29,6 +30,7 @@ from schema.work_project.projects import (
 from service.agent.sessions import cancel_sessions, delete_session, ensure_sdk_session_row, list_sessions
 from service.common.pagination import Page, paginate_statement
 from service.work_project.assets import apply_asset_request
+from service.work_project.graph import purge_edges_touching_asset
 from service.work_project.progress import derive_work_project_status
 
 
@@ -552,9 +554,26 @@ async def _upsert_project_assets(session, project_id: int, assets: list[WorkProj
             asset = WorkProjectAsset(project_id=project_id, created_at=now, updated_at=now)
             existing[request.identity] = asset
             session.add(asset)
+            apply_asset_request(asset, request, now)
+        else:
+            previous_extra = asset.extra
+            apply_asset_request(asset, request, now)
+            if "extra" not in request.model_fields_set:
+                asset.extra = previous_extra
         # A metadata-declared asset is authoritative project scope, even if an agent discovered it first.
         asset.origin = WorkProjectAssetOrigin.SCOPE
-        apply_asset_request(asset, request, now)
+        asset.created_by_agent_code = ""
+        asset.created_from_session_id = ""
+    for asset in rows:
+        if asset.origin != WorkProjectAssetOrigin.SCOPE or (asset.type, asset.identifier) in seen:
+            continue
+        await session.execute(
+            update(WorkProjectFinding)
+            .where(WorkProjectFinding.asset_id == asset.id)
+            .values(asset_id=None)
+        )
+        await purge_edges_touching_asset(session, project_id, asset.id or 0)
+        await session.delete(asset)
 
 
 def _duplicate_asset_identity(assets: list[WorkProjectAssetRequest]) -> str:

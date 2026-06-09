@@ -4,10 +4,12 @@
 export const SYSTEM_USER_ROLES = ["admin", "user"] as const;
 export const WORK_PROJECT_TYPES = ["penetration_test", "source_code_audit"] as const;
 export const WORK_PROJECT_STATUSES = ["working", "completed", "canceled"] as const;
+export const WORK_PROJECT_STATUS = {"WORKING": "working", "COMPLETED": "completed", "CANCELED": "canceled"} as const;
 export const WORK_PROJECT_TASK_STATUSES = ["todo", "in_progress", "blocked", "done"] as const;
 export const WORK_PROJECT_ASSET_TYPES = ["service", "domain", "network", "binary"] as const;
 export const WORK_PROJECT_ASSET_TYPE = {"SERVICE": "service", "DOMAIN": "domain", "NETWORK": "network", "BINARY": "binary"} as const;
 export const WORK_PROJECT_ASSET_ORIGINS = ["scope", "discovered"] as const;
+export const WORK_PROJECT_ASSET_ORIGIN = {"SCOPE": "scope", "DISCOVERED": "discovered"} as const;
 export const WORK_PROJECT_FINDING_SEVERITIES = ["info", "low", "medium", "high", "critical"] as const;
 export const WORK_PROJECT_FINDING_STATUSES = ["suspected", "validated", "false_positive"] as const;
 export const WORK_PROJECT_GRAPH_EDGE_TYPES = ["related", "resolves_to", "hosts", "connects_to", "trusts", "exploits", "pivots_to", "leads_to"] as const;

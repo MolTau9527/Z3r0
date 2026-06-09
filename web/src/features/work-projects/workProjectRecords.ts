@@ -1,7 +1,6 @@
 import {
   getWorkProject,
   getWorkProjectGraph,
-  queryWorkProjectAssets,
   queryWorkProjectFindings,
 } from "../../shared/api/workProjects";
 import type {
@@ -37,17 +36,17 @@ export const EMPTY_WORK_PROJECT_RECORDS: WorkProjectRecords = {
 };
 
 export async function loadWorkProjectRecordSnapshot(projectId: number): Promise<WorkProjectRecordSnapshot> {
-  const [projectResponse, assetsResponse, findingsResponse, graphResponse] = await Promise.all([
+  const [projectResponse, findingsResponse, graphResponse] = await Promise.all([
     getWorkProject(projectId),
-    queryWorkProjectAssets(projectId, { page: 1, size: 100, keyword: "" }),
     queryWorkProjectFindings(projectId, { page: 1, size: 100, keyword: "" }),
     getWorkProjectGraph(projectId),
   ]);
+  const project = projectResponse.data ?? null;
 
   return {
-    project: projectResponse.data ?? null,
+    project,
     records: {
-      assets: assetsResponse.data?.items ?? [],
+      assets: project?.assets ?? [],
       findings: findingsResponse.data?.items ?? [],
       graph: graphResponse.data ?? EMPTY_WORK_PROJECT_GRAPH,
     },

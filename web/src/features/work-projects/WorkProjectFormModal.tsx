@@ -2,6 +2,7 @@ import { Button, Input, InputNumber, Select, Spin, Tag, TextArea } from "@douyin
 import { FolderKanban, Plus, ScanSearch, Server, Trash2, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  WORK_PROJECT_ASSET_ORIGIN,
   getWorkProjectAssetTypes,
   getWorkProjectTypes,
   isWorkProjectAssetType,
@@ -41,7 +42,7 @@ type SelectedOption = {
 };
 
 type AssetFormRow = WorkProjectAssetRequest & {
-  existing_id?: number;
+  existingId?: number;
 };
 
 type WorkProjectFormValues = Omit<CreateWorkProjectRequest, "assets"> & {
@@ -106,7 +107,7 @@ export function WorkProjectFormModal({ open, saving, project, onCancel, onSubmit
       description: project.description,
       owner_user_ids: project.owner_user_ids,
       sandbox_container_id: project.sandbox_container_id ?? null,
-      assets: project.assets.length ? project.assets.map(assetFromProject) : [{ ...EMPTY_ASSET }],
+      assets: scopeAssetsFromProject(project),
       type: project.type,
     } : { ...EMPTY, assets: [{ ...EMPTY_ASSET }] });
     void loadSandboxContainers();
@@ -239,7 +240,7 @@ export function WorkProjectFormModal({ open, saving, project, onCancel, onSubmit
                 <span>Type</span>
                 <Select
                   value={asset.type}
-                  disabled={Boolean(asset.existing_id)}
+                  disabled={Boolean(asset.existingId)}
                   optionList={assetTypes.map((type) => ({ label: WORK_PROJECT_ASSET_TYPE_LABEL[type], value: type }))}
                   onChange={(type) => isWorkProjectAssetType(type) && updateAsset(index, resetAssetForType(type))}
                 />
@@ -250,7 +251,6 @@ export function WorkProjectFormModal({ open, saving, project, onCancel, onSubmit
                   <Input
                     value={asset.path}
                     maxLength={500}
-                    disabled={Boolean(asset.existing_id)}
                     required
                     onChange={(path) => updateAsset(index, { path })}
                   />
@@ -273,7 +273,7 @@ export function WorkProjectFormModal({ open, saving, project, onCancel, onSubmit
                 icon={<Trash2 size={14} />}
                 theme="borderless"
                 type="danger"
-                disabled={values.assets.length <= 1 || Boolean(asset.existing_id)}
+                disabled={values.assets.length <= 1}
                 aria-label="Remove asset"
                 onClick={() => removeAsset(index)}
               />
@@ -309,12 +309,19 @@ function SandboxContainerOption({ container }: { container: SandboxContainer }) 
 
 function assetFromProject(asset: WorkProject["assets"][number]): AssetFormRow {
   return {
-    existing_id: asset.id,
+    existingId: asset.id,
     type: asset.type,
     path: asset.path,
     host: asset.host,
     port: asset.port,
   };
+}
+
+function scopeAssetsFromProject(project: WorkProject): AssetFormRow[] {
+  const assets = project.assets
+    .filter((asset) => asset.origin === WORK_PROJECT_ASSET_ORIGIN.SCOPE)
+    .map(assetFromProject);
+  return assets.length ? assets : [{ ...EMPTY_ASSET }];
 }
 
 function normalizeAsset(asset: AssetFormRow): WorkProjectAssetRequest {
@@ -339,8 +346,8 @@ function resetAssetForType(type: WorkProjectAssetRequest["type"]): Partial<Asset
 }
 
 // Label for the `host` input field, which carries a different identifier per asset type.
-const ASSET_HOST_FIELD_LABEL: Record<Exclude<WorkProjectAssetRequest["type"], "binary">, string> = {
-  service: "Host",
-  domain: "Domain",
-  network: "Network (CIDR)",
+const ASSET_HOST_FIELD_LABEL: Record<Exclude<WorkProjectAssetRequest["type"], typeof WORK_PROJECT_ASSET_TYPE.BINARY>, string> = {
+  [WORK_PROJECT_ASSET_TYPE.SERVICE]: "Host",
+  [WORK_PROJECT_ASSET_TYPE.DOMAIN]: "Domain",
+  [WORK_PROJECT_ASSET_TYPE.NETWORK]: "Network (CIDR)",
 };

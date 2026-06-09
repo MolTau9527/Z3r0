@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRefreshWorkProjects } from "../../app/layouts/AdminLayout";
+import { WORK_PROJECT_STATUS } from "../../shared/api/contract";
 import {
   cancelWorkProject,
   createWorkProject,
@@ -83,7 +84,7 @@ export function WorkProjectsPage() {
   const summary = useMemo(
     () => projects.reduce(
       (acc, project) => ({
-        working: acc.working + (project.status === "working" ? 1 : 0),
+        working: acc.working + (project.status === WORK_PROJECT_STATUS.WORKING ? 1 : 0),
         sessions: acc.sessions + project.session_count,
         assets: acc.assets + project.assets.length,
       }),
@@ -149,7 +150,7 @@ export function WorkProjectsPage() {
     { key: "type", header: "Type", width: "132px", render: (project) => <WorkProjectTypeTag project={project} /> },
     { key: "status", header: "Status", width: "104px", render: (project) => <WorkProjectStatusTag project={project} /> },
     {
-      key: "scope", header: "Scope", width: "minmax(170px, 0.5fr)",
+      key: "records", header: "Records", width: "minmax(170px, 0.5fr)",
       render: (project) => <div className="resource-description">{project.assets.length} assets · {project.tasks.length} tasks</div>,
     },
     { key: "updated", header: "Updated", width: "minmax(150px, 0.4fr)", render: (p) => formatDateTime(p.updated_at) },

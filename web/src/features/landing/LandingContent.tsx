@@ -1,6 +1,7 @@
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   Bot,
   Box,
   Braces,
@@ -283,19 +284,42 @@ const runtimeSteps = [
   { title: "Replay", text: "Timeline events are stamped with seq values and item keys so refreshes read the same frames as live streams.", icon: FileSearch },
 ];
 
+const evidenceFlow = [
+  {
+    title: "Authorized Scope",
+    text: "Declared assets, owners, sandbox binding, and assessment objective define the operating boundary.",
+    icon: Fingerprint,
+  },
+  {
+    title: "Specialist Work",
+    text: "Coordinator and specialist agents execute through scoped tools, knowledge, and controlled sandboxes.",
+    icon: Workflow,
+  },
+  {
+    title: "Structured Evidence",
+    text: "Assets, findings, relationship edges, and attack paths are stored as WorkProject records.",
+    icon: FileCheck2,
+  },
+  {
+    title: "Reviewable Chain",
+    text: "Timeline replay, graph views, and record tabs keep validation and handoff independent from model context.",
+    icon: GitBranch,
+  },
+];
+
 const highlights = [
-  ["True Async Instance Drivers", "Main and subagent drivers drain ready turns, stop while background work runs, and relaunch only when integration work is ready."],
-  ["Notification Obligation Scheduler", "Subagent tasks and sandbox async jobs register AWAITING obligations atomically, then wake owners by flipping them to PENDING."],
-  ["Turn-terminal Async Commands", "Successful async command dispatch ends the agent turn immediately, preventing polling and making completion notification the only resume path."],
-  ["Interrupt-driven Task Runtime", "A unified execution loop races SDK streams against notifications, preempting turns with CPU-interrupt-style atomicity while preserving tool-call safety."],
-  ["Session-level Agent Graph", "Roles, tools, knowledge, and subagents are bound dynamically for each assessment session."],
-  ["Self-healing Delegation Drivers", "Specialist work can go dormant, recover from stale state, cancel live or dormant runs, and avoid hot relaunch loops."],
-  ["Durable Timeline Replay", "Persisted UI events use stable seq values and item keys, so replay no longer reconstructs transcript state from SDK messages."],
-  ["First-class WorkProject Records", "Project sessions persist assets, findings, relationship edges, and attack paths as structured review objects."],
-  ["Viewer-specific Projection", "Agents share persisted history while receiving context scoped to their responsibility."],
-  ["Long-context Compaction", "Earlier history is summarized while recent context and durable facts remain available."],
-  ["Stable Streaming Contract", "Frontend event schemas stay independent from model SDK internals."],
-  ["Sandbox Tool Invalidation", "Sandbox status changes invalidate tool bindings and clean up active jobs."],
+  ["Async Instance Drivers", "Main and specialist drivers drain ready work, stop while background obligations run, and relaunch only when results are ready to integrate."],
+  ["Notification-backed Liveness", "Subagent tasks and sandbox jobs register AWAITING obligations atomically, then wake owners through PENDING notifications."],
+  ["Turn-terminal Commands", "Long sandbox commands end the current agent turn immediately, preventing polling loops and preserving a single resume path."],
+  ["Interruptible Runtime", "The task runtime races SDK streams against notifications while deferring interruption until pending tool calls reach a safe point."],
+  ["Session Agent Graph", "Roles, tools, knowledge, subagents, model settings, sandbox state, and WorkProject state are assembled per session."],
+  ["Recoverable Delegation", "Specialist work can go dormant, resume after child work completes, cancel cleanly, and avoid hot relaunch loops."],
+  ["Durable Timeline Replay", "Persisted UI events use stable seq values and item keys, so live streaming and replay share the same event contract."],
+  ["WorkProject Evidence Records", "Project sessions persist scope assets, discovered assets, findings, relationship edges, and attack paths as structured review data."],
+  ["Scoped Context Projection", "Agents share persisted history while receiving role-appropriate context views that filter private tool traces."],
+  ["Long-context Compaction", "Earlier projected history is summarized while recent context and durable facts remain available for continuation."],
+  ["Generated Frontend Contracts", "Frontend types and enum constants are regenerated from backend schema instead of manually maintained in feature code."],
+  ["Sandbox Tool Invalidation", "Sandbox state changes invalidate tool bindings and clean up active subagent work or async commands."],
 ];
 
 const sandboxTools = ["Commands", "Skills", "Shell", "Files", "noVNC", "Ghidra", "jadx", "sqlmap", "nmap"];
@@ -317,10 +341,10 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
           <div className="landing-title-row">
             <img className="landing-hero-logo" src={logoSrc} width="1000" height="1000" alt="Z3r0 logo" />
             <div>
-              <h1>Multi-Agent Security Workbench</h1>
+              <h1>AI-Native Security Assessment Workbench</h1>
               <p>
-                A controlled multi-agent workbench for authorized security assessment,
-                code auditing, finding-backed validation, attack-path replay, and controlled research.
+                An AI-native workbench for authorized security assessment, code audit,
+                controlled execution, structured evidence, and replayable review.
               </p>
             </div>
           </div>
@@ -336,8 +360,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
         <div className="landing-capability-matrix" aria-label="Z3r0 capability matrix">
           <div className="landing-capability-header">
             <span className="page-eyebrow">Operating Model</span>
-            <strong>Coordinator-led work with</strong>
-            <strong>specialist execution, durable records, and review paths.</strong>
+            <strong>Coordinator-led assessment with specialist execution, durable evidence, and explicit review paths.</strong>
           </div>
           <div className="landing-capability-disclaimer">
             <div className="landing-boundary-heading">
@@ -378,7 +401,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
         <div className="landing-section-heading">
           <span className="page-eyebrow">Architecture</span>
           <h2 id="architecture-title">Layered architecture for governed agent operations.</h2>
-          <p>Z3r0 separates the user-facing surface, API boundary, runtime orchestration, async instance drivers, session agent graph, controlled execution, model access, notification-backed liveness, timeline replay, and persisted WorkProject records.</p>
+          <p>Z3r0 separates the workbench, API boundary, runtime orchestration, resumable drivers, session agent graph, controlled execution, model access, notification-backed liveness, timeline replay, and persisted WorkProject evidence records.</p>
         </div>
 
         <div className="landing-architecture-layout">
@@ -461,10 +484,28 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
         </div>
       </section>
 
+      <section id="evidence" className="landing-section landing-evidence" aria-labelledby="evidence-title">
+        <div className="landing-section-heading">
+          <span className="page-eyebrow">Evidence Chain</span>
+          <h2 id="evidence-title">Durable records keep findings reviewable after the model context changes.</h2>
+          <p>Agent output is useful only when it can be traced to scope, evidence, relationships, and review state. WorkProject records turn transient analysis into structured data owned by the application.</p>
+        </div>
+        <div className="landing-evidence-flow" aria-label="Z3r0 evidence chain">
+          {evidenceFlow.map(({ icon: Icon, title, text }, index) => (
+            <article key={title} className="landing-evidence-step">
+              <div className="landing-evidence-icon"><Icon size={18} /></div>
+              <h3>{title}</h3>
+              <p>{text}</p>
+              {index < evidenceFlow.length - 1 ? <ArrowRight className="landing-evidence-arrow" size={18} aria-hidden="true" /> : null}
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section id="runtime" className="landing-section landing-runtime" aria-labelledby="runtime-title">
         <div className="landing-section-heading">
           <span className="page-eyebrow">Runtime Flow</span>
-          <h2 id="runtime-title">Async drivers keep long reviews resumable without polling or blocking on background work.</h2>
+          <h2 id="runtime-title">Async drivers keep long assessments resumable without polling or blocking on background work.</h2>
         </div>
 
         <div className="landing-runtime-track">
@@ -485,8 +526,8 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
         <div className="landing-sandbox-panel">
           <div>
             <span className="page-eyebrow">Sandbox Tooling</span>
-            <h3>Agent tools and manual review share the same controlled execution boundary.</h3>
-            <p>Short commands return captured output metadata immediately. Long commands end the current agent turn and resume the owner only after terminal status and output metadata are available.</p>
+            <h3>Agent tools and manual review share one controlled execution boundary.</h3>
+            <p>Short commands return captured output metadata immediately. Long commands end the current agent turn and resume the owner only after terminal status, exit code, output size, and output file are available.</p>
           </div>
           <div className="landing-tool-cloud">
             {sandboxTools.map((tool) => <span key={tool}>{tool}</span>)}
@@ -497,7 +538,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
       <section className="landing-section landing-highlights" aria-labelledby="highlights-title">
         <div className="landing-section-heading">
           <span className="page-eyebrow">Technical Characteristics</span>
-          <h2 id="highlights-title">Runtime boundaries aligned to the current async scheduling implementation.</h2>
+          <h2 id="highlights-title">Implementation boundaries that make agent work recoverable, auditable, and contract-driven.</h2>
         </div>
         <div className="landing-highlight-grid">
           {highlights.map(([title, text], index) => (
@@ -515,7 +556,7 @@ export function LandingContent({ logoSrc, primaryAction }: LandingContentProps) 
       <section id="security" className="landing-section landing-security" aria-labelledby="security-title">
         <div className="landing-section-heading">
           <span className="page-eyebrow">Operational Boundary</span>
-          <h2 id="security-title">Built for authorized assessments in controlled enterprise environments.</h2>
+          <h2 id="security-title">Built for authorized assessments in controlled environments.</h2>
           <p>Use Z3r0 where sandbox execution, Docker access, file operations, and model credentials can be governed as high-privilege assets.</p>
         </div>
         <div className="landing-boundary">

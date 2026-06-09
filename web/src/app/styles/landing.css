@@ -504,6 +504,7 @@
 .landing-architecture-detail,
 .landing-sandbox-panel,
 .landing-boundary,
+.landing-evidence-step,
 .landing-highlight-card,
 .landing-agent-card,
 .landing-runtime-step {
@@ -638,6 +639,55 @@
   box-shadow: inset 0 3px 0 #219699;
 }
 
+.landing-evidence-flow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.landing-evidence-step {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 214px;
+  padding: 18px;
+}
+
+.landing-evidence-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  color: #ffffff;
+  border: 1px solid rgba(156, 199, 203, 0.26);
+  border-radius: 8px;
+  background: rgba(33, 150, 153, 0.16);
+}
+
+.landing-evidence-step h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 17px;
+  letter-spacing: 0;
+}
+
+.landing-evidence-step p {
+  margin: 0;
+  color: #9fb2c7;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.landing-evidence-arrow {
+  position: absolute;
+  top: 29px;
+  right: -15px;
+  z-index: 2;
+  color: #9cc7cb;
+  filter: drop-shadow(0 0 10px rgba(3, 7, 18, 0.9));
+}
+
 .landing-runtime-track {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -750,9 +800,14 @@
   }
 
   .landing-agent-grid,
+  .landing-evidence-flow,
   .landing-runtime-track,
   .landing-highlight-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .landing-evidence-arrow {
+    display: none;
   }
 
   .landing-runtime-step,
@@ -805,6 +860,7 @@
   }
 
   .landing-agent-grid,
+  .landing-evidence-flow,
   .landing-runtime-track,
   .landing-highlight-grid {
     grid-template-columns: 1fr;

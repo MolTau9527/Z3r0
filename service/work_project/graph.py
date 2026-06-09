@@ -88,13 +88,20 @@ async def upsert_work_project_graph_edge(
         except IntegrityError:
             # Lost a concurrent create race: re-read the winning edge and apply the label.
             await session.rollback()
+            error = await _validate_edge_assets(session, project_id, request)
+            if error:
+                return None, error
             edge = await _get_edge_by_relation(session, project_id, request)
             if edge is None:
                 return None, "graph edge already exists"
             edge.label = request.label
             edge.updated_at = datetime.now()
             session.add(edge)
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                return None, "graph edge already exists"
         await session.refresh(edge)
     return WorkProjectGraphEdgeSchema.model_validate(edge), ""
 
@@ -124,6 +131,9 @@ async def update_work_project_graph_edge(
             await session.commit()
         except IntegrityError:
             await session.rollback()
+            error = await _validate_edge_assets(session, project_id, request)
+            if error:
+                return None, error
             return None, "graph edge already exists"
         await session.refresh(edge)
     return WorkProjectGraphEdgeSchema.model_validate(edge), ""
@@ -247,6 +257,9 @@ async def create_work_project_attack_path_step(
             await session.commit()
         except IntegrityError:
             await session.rollback()
+            error = await _validate_step_refs(session, project_id, path_id, request)
+            if error:
+                return None, error
             return None, "attack path step already exists"
         await session.refresh(step)
     return WorkProjectAttackPathStepSchema.model_validate(step), ""
@@ -276,6 +289,9 @@ async def update_work_project_attack_path_step(
             await session.commit()
         except IntegrityError:
             await session.rollback()
+            error = await _validate_step_refs(session, project_id, path_id, request)
+            if error:
+                return None, error
             return None, "attack path step already exists"
         await session.refresh(step)
     return WorkProjectAttackPathStepSchema.model_validate(step), ""

@@ -23,16 +23,18 @@
 >
 > 本项目仅面向已授权的安全评估、代码审计、内部复核和受控研究场景。本项目本身不授予任何测试、访问、扫描或影响第三方系统、网络、服务、账号或数据的权限。使用者应自行取得并保存授权，明确使用范围，并遵守适用法律法规、合同约定和授权边界。
 
-Z3r0 是一个面向授权安全评估、代码审计、内部复核和受控研究场景的多 Agent 工作台。平台以主控安全 Agent、专业 Agent、Docker 执行边界和 WorkProject 记录组织任务，使计划制定、资产发现、风险验证、关系梳理、攻击路径还原和人工复核保持在同一个受控工作流中。
+Z3r0 是一个面向授权环境的 AI 原生安全评估工作台。平台将主控 Agent、专业 Agent、Docker 执行边界、持久证据记录和可回放时间线组合在一起，使计划制定、资产发现、风险验证、关系梳理、攻击路径还原和人工复核保持在同一个受控工作流中。
+
+项目的核心运行前提是：Agent 可以辅助分析与执行，但可复核事实必须以结构化、带范围、可审计、可回放的形式保存在模型上下文之外。WorkProject 记录将资产、发现、关系边和攻击路径作为应用自有数据持久化；运行时则通过通知义务恢复长周期 Agent 工作，避免轮询循环和阻塞式 driver。
 
 ## 设计原则
 
-- **授权优先**：面向经过批准的内部评估、代码审计、培训和受控研究环境。
-- **职责清晰**：主控 Agent 负责任务拆解和结果整合，专业 Agent 分别处理情报搜集、渗透验证、代码审计、逆向分析和密码学审查。
-- **过程追踪**：会话、工具调用、委派任务和流式事件持久化存储，便于恢复、审计和复核。
-- **项目记录持久化**：WorkProject 会话将资产、发现、关系图边和攻击路径作为一等复盘对象保存。
-- **执行受控**：命令执行、浏览器、文件管理和图形工具均通过绑定的 Docker 沙箱提供。
-- **模型解耦**：模型访问收敛在运行时和角色接口之后，使用原生 OpenAI 兼容模型服务，并可配置 Chat Completions 或 Responses 模式。
+- **先授权，后自动化**：所有工作流都以明确合法范围、受控目标和操作者责任为前提。
+- **角色化执行**：主控 Agent 负责任务拆解和结果整合，专业 Agent 在职责边界内处理情报、渗透验证、代码审计、逆向分析和密码学审查。
+- **结构化证据优先**：资产、发现、关系边和攻击路径保存在模型上下文之外，确保对话变化后证据仍可复核。
+- **长周期任务可恢复**：通知义务统一表达子 Agent 工作和沙箱异步任务，使 driver 可以干净停止，并在结果可集成时恢复。
+- **受控执行边界**：命令、浏览器、文件管理、图形工具和技能均通过绑定的 Docker 沙箱执行，而不是直接运行在应用宿主机上。
+- **稳定契约**：前端消费 REST、WebSocket、时间线和生成 schema 契约，不直接依赖模型 SDK 或服务商内部事件。
 
 ## 总体架构
 
@@ -47,6 +49,7 @@ flowchart TB
   Graph["Session Agent Graph<br/>能力层"]
   Timeline["Timeline Event Log<br/>回放层"]
   Record["WorkProject Records<br/>复盘层"]
+  Evidence["证据链<br/>资产 / 发现 / 路径"]
   Sandbox["Docker Sandbox<br/>执行层"]
   Tools["Tool Surface<br/>工具层"]
   Models["Model Providers<br/>模型层"]
@@ -70,10 +73,25 @@ flowchart TB
   Graph --> Models
   Sandbox --> Tools
   Record --> Store
+  Record --> Evidence
+  Evidence --> Workbench
   Events --> Workbench
 ```
 
-系统按明确层次组织：面向使用者的工作台、API 边界、运行时编排、可恢复的 instance driver、通知驱动的活跃态、会话级 Agent Graph、受控执行、模型访问、流式事件协议、持久化时间线回放和 WorkProject 记录。后端负责认证、会话生命周期、上下文投影、事件归一化、任务委派、沙箱绑定、工具挂载、通知义务、项目内记录、持久化和历史压缩；前端消费稳定的 REST 与 WebSocket 协议，不直接依赖模型 SDK 或模型服务商细节。
+系统按明确层次组织：面向使用者的工作台、API 边界、运行时编排、可恢复的 instance driver、通知驱动的活跃态、会话级 Agent Graph、受控执行、模型访问、流式事件协议、持久化时间线回放和 WorkProject 证据记录。后端负责认证、会话生命周期、上下文投影、事件归一化、任务委派、沙箱绑定、工具挂载、通知义务、项目内记录、持久化和历史压缩；前端消费稳定的 REST 与 WebSocket 协议，不直接依赖模型 SDK 或模型服务商细节。
+
+### 价值链路
+
+```mermaid
+flowchart LR
+  Scope["授权范围<br/>资产、负责人、沙箱"] --> Agents["角色化 Agent<br/>主控 + 专家"]
+  Agents --> Tools["受控工具<br/>沙箱、知识库、技能"]
+  Tools --> Evidence["结构化证据<br/>资产、发现、边、路径"]
+  Evidence --> Review["人工复核<br/>工作区、关系图、回放"]
+  Review --> Continuity["连续性<br/>恢复、审计、报告数据"]
+```
+
+这条价值链使高风险安全工作保持清晰边界：先声明范围，再由 Agent 通过显式工具执行；工具输出被沉淀为结构化记录；复核人员可以基于图谱和时间线检查结果，而不依赖隐藏的模型状态。
 
 ## Agent 编队
 
@@ -237,8 +255,8 @@ erDiagram
     enum   type        "service | domain | network | binary"
     enum   origin      "scope | discovered"
     string identifier  "(type, identifier) 身份"
-    string created_by_agent_code  "溯源"
-    string created_from_session_id "溯源"
+    string created_by_agent_code  "discovered 资产的 Agent 溯源"
+    string created_from_session_id "discovered 资产的 Agent 溯源"
   }
   EDGE {
     enum   type   "related|resolves_to|hosts|connects_to|trusts|exploits|pivots_to|leads_to"
@@ -270,7 +288,7 @@ erDiagram
 
 该链路从五个维度实现可审计、可追溯：
 
-- **溯源**：每条资产、边、发现、路径、步骤都携带 `created_by_agent_code`、`created_from_session_id` 与 `created_at`/`updated_at`，任一事实都能回溯到具体是哪个 Agent、哪个会话、在何时产生。
+- **溯源**：由 Agent 创建的资产、边、发现、路径、步骤携带 `created_by_agent_code`、`created_from_session_id` 与 `created_at`/`updated_at`，可回溯到具体是哪个 Agent、哪个会话、在何时产生。声明的 `scope` 资产由项目元数据拥有，运行时溯源保持为空。
 - **证据绑定**：发现的 `edge_id` 把佐证绑定到某条具体关系，`asset_id` 把佐证绑定到某个具体节点，佐证本身（`description`/`impact`）保存在发现里——因此任一关系或攻击步骤都能下钻到支撑它的证据。
 - **置信度生命周期**：发现的 `status`（`suspected` → `validated`/`false_positive`，验证时刻由 `validated_at` 打戳）与攻击路径的 `status`（`suspected` → `validated`，或 `blocked`/`closed`）共同让每条论断的成熟度显式可见；未经验证的内容不会被当作事实呈现。
 - **可重放路径**：攻击路径是有序步骤列表，每步锚定两资产间的一条边，因此从入口到影响的路线可逐跳重建，且每一跳都携带各自的支撑发现。

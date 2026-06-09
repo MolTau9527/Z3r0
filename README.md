@@ -23,16 +23,18 @@
 >
 > This project is provided only for authorized security assessment, code auditing, internal review, and controlled research. It does not grant permission to test, access, scan, or affect any third-party system, network, service, account, or data. Users are solely responsible for obtaining and preserving authorization, defining scope, and complying with applicable laws, contracts, and authorization boundaries.
 
-Z3r0 is a controlled multi-agent workbench for authorized security assessment, code auditing, internal review, and controlled research. It coordinates a lead security agent, domain specialists, Docker-backed execution surfaces, and WorkProject records so planning, asset discovery, risk validation, relationship mapping, attack-path reconstruction, and manual review remain in one governed workflow.
+Z3r0 is an AI-native security assessment workbench for authorized environments. It combines a coordinator-led agent team, specialist execution, Docker-backed tooling, durable evidence records, and replayable timelines so planning, discovery, validation, relationship mapping, attack-path reconstruction, and human review stay in one governed workflow.
+
+The project is built around a simple operating premise: agents may assist with analysis and execution, but durable facts must be structured, scoped, auditable, and reviewable outside the model context. WorkProject records preserve assets, findings, relationship edges, and attack paths as application-owned data, while the runtime keeps long-running agent work resumable through notification obligations instead of polling loops or blocking drivers.
 
 ## Design Principles
 
-- **Authorized operation first**: Z3r0 is designed for approved internal assessments, code review, training, and controlled research environments.
-- **Clear role boundaries**: a coordinator decomposes the task, while specialist agents handle intelligence, penetration validation, code audit, reverse engineering, and cryptographic review within defined scopes.
-- **Traceable work**: sessions, tool calls, delegation jobs, and streamed events are persisted so reviews can be resumed and audited.
-- **Durable project records**: WorkProject sessions persist assets, findings, relationship edges, and attack paths as first-class review objects.
-- **Controlled execution**: command execution, browser access, file management, and GUI tooling run through bound Docker sandboxes.
-- **Model abstraction**: model access is kept behind runtime and role interfaces, using native OpenAI-compatible providers with configurable Chat Completions or Responses mode.
+- **Authorization before automation**: every workflow assumes an explicit legal scope, controlled targets, and operator accountability before any tool capability is used.
+- **Role-governed execution**: the coordinator owns decomposition and synthesis; specialist agents handle intelligence, penetration validation, code audit, reverse engineering, and cryptographic review within scoped responsibilities.
+- **Structured evidence over transient context**: durable WorkProject records persist assets, findings, relationship edges, and attack paths outside model context so evidence remains reviewable after the conversation changes.
+- **Resumable long-running work**: notification obligations model background subagent work and sandbox jobs, allowing drivers to stop cleanly and resume only when integration work is ready.
+- **Controlled execution boundary**: command execution, browser workflows, file management, GUI tooling, and skills run through bound Docker sandboxes rather than the application host.
+- **Stable contracts**: the frontend consumes application REST, WebSocket, timeline, and generated schema contracts instead of model SDK or provider internals.
 
 ## Architecture
 
@@ -47,6 +49,7 @@ flowchart TB
   Graph["Session Agent Graph<br/>Capability Layer"]
   Timeline["Timeline Event Log<br/>Replay Layer"]
   Record["WorkProject Records<br/>Review Layer"]
+  Evidence["Evidence Chain<br/>Assets / Findings / Paths"]
   Sandbox["Docker Sandbox<br/>Execution Layer"]
   Tools["Tool Surface<br/>Tool Layer"]
   Models["Model Providers<br/>Model Layer"]
@@ -70,10 +73,25 @@ flowchart TB
   Graph --> Models
   Sandbox --> Tools
   Record --> Store
+  Record --> Evidence
+  Evidence --> Workbench
   Events --> Workbench
 ```
 
-The system is organized into explicit layers: user-facing workbench, API boundary, runtime orchestration, resumable instance drivers, notification-backed liveness, session agent graph, controlled execution, model access, streaming event contract, durable timeline replay, and persisted WorkProject records. The backend owns authentication, session lifecycle, context projection, event normalization, delegation, sandbox binding, tool mounting, notification obligations, persistence, project-scoped records, and history compaction. The frontend consumes stable REST and WebSocket contracts and does not depend on model SDK or provider internals.
+The system is organized into explicit layers: user-facing workbench, API boundary, runtime orchestration, resumable instance drivers, notification-backed liveness, session agent graph, controlled execution, model access, streaming event contract, durable timeline replay, and persisted WorkProject evidence records. The backend owns authentication, session lifecycle, context projection, event normalization, delegation, sandbox binding, tool mounting, notification obligations, persistence, project-scoped records, and history compaction. The frontend consumes stable REST and WebSocket contracts and does not depend on model SDK or provider internals.
+
+### Value Model
+
+```mermaid
+flowchart LR
+  Scope["Authorized Scope<br/>assets, owners, sandbox"] --> Agents["Role-scoped Agents<br/>coordinator + specialists"]
+  Agents --> Tools["Controlled Tools<br/>sandbox, knowledge, skills"]
+  Tools --> Evidence["Structured Evidence<br/>assets, findings, edges, paths"]
+  Evidence --> Review["Human Review<br/>workspace, graph, replay"]
+  Review --> Continuity["Continuity<br/>resume, audit, report-ready data"]
+```
+
+This value chain keeps high-risk security work operationally bounded. Scope is declared before execution, agents work through explicit tools, tool output is distilled into structured records, and reviewers can inspect the resulting graph and timeline without relying on hidden model state.
 
 ## Agent Team
 
@@ -237,8 +255,8 @@ erDiagram
     enum   type        "service | domain | network | binary"
     enum   origin      "scope | discovered"
     string identifier  "(type, identifier) identity"
-    string created_by_agent_code  "provenance"
-    string created_from_session_id "provenance"
+    string created_by_agent_code  "agent provenance for discovered assets"
+    string created_from_session_id "agent provenance for discovered assets"
   }
   EDGE {
     enum   type   "related|resolves_to|hosts|connects_to|trusts|exploits|pivots_to|leads_to"
@@ -270,7 +288,7 @@ erDiagram
 
 The chain is auditable and traceable on five axes:
 
-- **Provenance** — every asset, edge, finding, path, and step carries `created_by_agent_code`, `created_from_session_id`, and `created_at`/`updated_at`, so each fact traces back to the exact agent and session that produced it and when.
+- **Provenance** — agent-created assets, edges, findings, paths, and steps carry `created_by_agent_code`, `created_from_session_id`, and `created_at`/`updated_at`, so each discovered fact traces back to the exact agent and session that produced it and when. Declared `scope` assets are owned by project metadata and keep runtime provenance blank.
 - **Evidence binding** — a finding's `edge_id` ties proof to a specific relationship and its `asset_id` ties proof to a specific node; the proof itself (`description`/`impact`) lives in the finding, so any relation or attack step can be drilled down to the evidence that justifies it.
 - **Confidence lifecycle** — a finding's `status` (`suspected` → `validated`/`false_positive`, with the moment of validation stamped by `validated_at`) and an attack path's `status` (`suspected` → `validated`, or `blocked`/`closed`) make the maturity of every claim explicit; nothing is presented as fact until it is validated.
 - **Replayable path** — an attack path is an ordered list of steps, each pinned to one edge between two assets, so the route from entry to impact can be reconstructed hop by hop, with each hop carrying its own supporting findings.

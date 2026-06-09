@@ -1,9 +1,9 @@
-import { Modal, Progress, Spin, TabPane, Tabs } from "@douyinfe/semi-ui";
-import { Boxes, Bug, FileText, Network, Route, UserRound } from "lucide-react";
-import { ReactNode, useEffect, useState } from "react";
+import { Modal, Progress, Spin } from "@douyinfe/semi-ui";
+import { FileText, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
 import { showApiError } from "../../shared/api/feedback";
 import type { WorkProject } from "../../shared/api/types";
-import { AssetList, AttackPathList, FindingList, GraphView } from "./ProjectRecordViews";
+import { WorkProjectRecordTabs } from "./ProjectRecordViews";
 import {
   EMPTY_WORK_PROJECT_RECORDS,
   loadWorkProjectRecordSnapshot,
@@ -132,20 +132,11 @@ export function WorkProjectInfoModal({ open, loading = false, project, projectId
             </section>
 
             <section className="project-record-panel">
-              <Tabs type="line" className="project-record-tabs" activeKey={activeTab} onChange={(key) => setActiveTab(key as ProjectRecordTab)}>
-                <TabPane tab={<TabLabel icon={<Boxes size={14} />} text="Assets" />} itemKey="assets">
-                  <AssetList assets={records.assets} />
-                </TabPane>
-                <TabPane tab={<TabLabel icon={<Bug size={14} />} text="Findings" />} itemKey="findings">
-                  <FindingList findings={records.findings} assets={records.assets} />
-                </TabPane>
-                <TabPane tab={<TabLabel icon={<Route size={14} />} text="Attack Paths" />} itemKey="attack-paths">
-                  <AttackPathList assets={records.assets} graph={records.graph} />
-                </TabPane>
-                <TabPane tab={<TabLabel icon={<Network size={14} />} text="Graph" />} itemKey="graph">
-                  <GraphView assets={records.assets} graph={records.graph} />
-                </TabPane>
-              </Tabs>
+              <WorkProjectRecordTabs
+                records={records}
+                activeTab={activeTab}
+                onActiveTabChange={setActiveTab}
+              />
             </section>
           </div>
         ) : null}
@@ -160,8 +151,4 @@ function ProjectInfoTitle({ project }: { project: WorkProject | null }) {
       <strong>{project?.name ?? "Work Project"}</strong>
     </div>
   );
-}
-
-function TabLabel({ icon, text }: { icon: ReactNode; text: string }) {
-  return <span className="workspace-tab-label">{icon}{text}</span>;
 }
