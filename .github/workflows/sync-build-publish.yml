@@ -236,10 +236,11 @@ jobs:
               image: ghcr.io/yv1ing/postgres-for-rag:latest
               container_name: z3r0-postgres
               restart: unless-stopped
+              # Keep these values aligned with database in .z3r0/config.json.
               environment:
-                POSTGRES_USER: ${POSTGRES_USER:-root}
-                POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-                POSTGRES_DB: ${POSTGRES_DB:-z3r0}
+                POSTGRES_USER: root
+                POSTGRES_PASSWORD: 123456
+                POSTGRES_DB: z3r0
               ports:
                 - "127.0.0.1:5432:5432"
               volumes:
@@ -257,8 +258,8 @@ jobs:
               profiles:
                 - admin
               environment:
-                PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
-                PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?set PGADMIN_DEFAULT_PASSWORD in .env}
+                PGADMIN_DEFAULT_EMAIL: me@yvling.cn
+                PGADMIN_DEFAULT_PASSWORD: 123456
                 PGADMIN_LISTEN_PORT: 5433
               ports:
                 - "127.0.0.1:5433:5433"
@@ -275,19 +276,7 @@ jobs:
           sed -i "s|__SANDBOX_IMAGE__|${sandbox_image}|g" docker-compose.yaml
           sed -i "s|__VERSION__|${VERSION}|g" docker-compose.yaml
 
-          cat > .env.example <<'ENVFILE'
-          # Copy this file to .env and set strong, unique passwords.
-          # PostgreSQL values must match .z3r0/config.json.
-          POSTGRES_USER=root
-          POSTGRES_PASSWORD=
-          POSTGRES_DB=z3r0
-
-          # Optional pgAdmin profile values.
-          PGADMIN_DEFAULT_EMAIL=admin@example.com
-          PGADMIN_DEFAULT_PASSWORD=
-          ENVFILE
-
-      - name: Publish deployment files atomically to delivery branch
+      - name: Publish deployment file atomically to delivery branch
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.sync.outputs.source_sha }}
@@ -309,18 +298,15 @@ jobs:
           }
 
           compose_blob="$(create_blob docker-compose.yaml)"
-          env_blob="$(create_blob .env.example)"
 
           tree_sha="$(
             jq -n \
               --arg base_tree "${SOURCE_SHA}" \
               --arg compose_blob "${compose_blob}" \
-              --arg env_blob "${env_blob}" \
               '{
                 base_tree: $base_tree,
                 tree: [
-                  {path: "docker-compose.yaml", mode: "100644", type: "blob", sha: $compose_blob},
-                  {path: ".env.example", mode: "100644", type: "blob", sha: $env_blob}
+                  {path: "docker-compose.yaml", mode: "100644", type: "blob", sha: $compose_blob}
                 ]
               }' |
               gh api \
