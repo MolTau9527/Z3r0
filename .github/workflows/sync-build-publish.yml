@@ -81,7 +81,16 @@ jobs:
 
           last_delivered_source=""
           if git fetch --no-tags origin "+delivery:refs/remotes/origin/delivery" 2>/dev/null; then
-            last_delivered_source="$(git rev-parse 'origin/delivery^1' 2>/dev/null || true)"
+            last_delivered_source="$(
+              git log -1 --format=%B origin/delivery |
+                sed -n 's/^Source-SHA: //p' |
+                tail -n 1
+            )"
+            # Compatibility with delivery commits created before Source-SHA
+            # was recorded in the commit message.
+            if [[ -z "${last_delivered_source}" ]]; then
+              last_delivered_source="$(git rev-parse 'origin/delivery^1' 2>/dev/null || true)"
+            fi
           fi
 
           should_build="true"
@@ -299,6 +308,14 @@ jobs:
 
           compose_blob="$(create_blob docker-compose.yaml)"
 
+          delivery_parent=""
+          if delivery_ref="$(
+            gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/delivery" 2>/dev/null
+          )"; then
+            delivery_parent="$(jq -r '.object.sha' <<< "${delivery_ref}")"
+          fi
+          commit_parent="${delivery_parent:-${SOURCE_SHA}}"
+
           tree_sha="$(
             jq -n \
               --arg base_tree "${SOURCE_SHA}" \
@@ -318,9 +335,9 @@ jobs:
 
           delivery_commit="$(
             jq -n \
-              --arg message "Generate latest deployment for ${VERSION}" \
+              --arg message "Generate latest deployment for ${VERSION}\n\nSource-SHA: ${SOURCE_SHA}" \
               --arg tree "${tree_sha}" \
-              --arg parent "${SOURCE_SHA}" \
+              --arg parent "${commit_parent}" \
               '{message: $message, tree: $tree, parents: [$parent]}' |
               gh api \
                 --method POST \
@@ -329,12 +346,11 @@ jobs:
                 --jq '.sha'
           )"
 
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/delivery" >/dev/null 2>&1; then
+          if [[ -n "${delivery_parent}" ]]; then
             gh api \
               --method PATCH \
               "repos/${GITHUB_REPOSITORY}/git/refs/heads/delivery" \
-              -f sha="${delivery_commit}" \
-              -F force=true >/dev/null
+              -f sha="${delivery_commit}" >/dev/null
           else
             gh api \
               --method POST \
