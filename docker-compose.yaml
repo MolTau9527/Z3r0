@@ -32,7 +32,8 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - ./.postgres-data:/var/lib/postgresql/data
+      # PostgreSQL 18+ stores data in major-version subdirectories.
+      - ./.postgres-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -43,8 +44,6 @@ services:
     image: ghcr.io/yv1ing/pgadmin4:latest
     container_name: z3r0-pgadmin
     restart: unless-stopped
-    profiles:
-      - admin
     environment:
       PGADMIN_DEFAULT_EMAIL: me@yvling.cn
       PGADMIN_DEFAULT_PASSWORD: 123456
