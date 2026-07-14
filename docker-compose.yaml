@@ -1,0 +1,58 @@
+name: z3r0
+
+# Published Z3r0 version: 0.2.1
+# Register this image in Z3r0's Sandbox Images page:
+# darkoutput/sandbox-runtime:latest
+
+services:
+  app:
+    image: darkoutput/z3r0:latest
+    container_name: z3r0-app
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./.z3r0:/app/.z3r0
+      - ./.lightrag:/app/.lightrag
+      # Z3r0 needs Docker API access to start sandbox containers.
+      # Treat this mount as equivalent to host-root access.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  postgres:
+    image: ghcr.io/yv1ing/postgres-for-rag:latest
+    container_name: z3r0-postgres
+    restart: unless-stopped
+    # Keep these values aligned with database in .z3r0/config.json.
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: z3r0
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./.postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  pgadmin:
+    image: ghcr.io/yv1ing/pgadmin4:latest
+    container_name: z3r0-pgadmin
+    restart: unless-stopped
+    profiles:
+      - admin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: me@yvling.cn
+      PGADMIN_DEFAULT_PASSWORD: 123456
+      PGADMIN_LISTEN_PORT: 5433
+    ports:
+      - "127.0.0.1:5433:5433"
+    volumes:
+      - ./.pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
