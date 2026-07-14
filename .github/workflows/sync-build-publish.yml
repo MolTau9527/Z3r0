@@ -3,7 +3,7 @@ name: Sync upstream and publish Docker images
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 2 * * *"
+    - cron: "17 */6 * * *"
 
 permissions: {}
 
@@ -23,8 +23,8 @@ jobs:
       contents: write
     outputs:
       source_sha: ${{ steps.source.outputs.source_sha }}
-      upstream_sha: ${{ steps.source.outputs.upstream_sha }}
-      short_sha: ${{ steps.source.outputs.short_sha }}
+      version: ${{ steps.source.outputs.version }}
+      should_build: ${{ steps.source.outputs.should_build }}
 
     steps:
       - name: Checkout fork main
@@ -45,7 +45,6 @@ jobs:
           git fetch --prune upstream main
 
           previous_sha="$(git rev-parse HEAD)"
-          upstream_sha="$(git rev-parse upstream/main)"
 
           if git merge-base --is-ancestor upstream/main HEAD; then
             echo "Fork already contains upstream/main"
@@ -74,17 +73,33 @@ jobs:
           fi
 
           source_sha="$(git rev-parse HEAD)"
-          short_sha="${source_sha:0:12}"
+          version="$(jq -r '.version // empty' web/package.json)"
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid or missing version in web/package.json: ${version}"
+            exit 1
+          fi
+
+          last_delivered_source=""
+          if git fetch --no-tags origin "+delivery:refs/remotes/origin/delivery" 2>/dev/null; then
+            last_delivered_source="$(git rev-parse 'origin/delivery^1' 2>/dev/null || true)"
+          fi
+
+          should_build="true"
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" && "${source_sha}" == "${last_delivered_source}" ]]; then
+            should_build="false"
+            echo "Source ${source_sha} is already published; skipping scheduled rebuild."
+          fi
 
           {
             echo "source_sha=${source_sha}"
-            echo "upstream_sha=${upstream_sha}"
-            echo "short_sha=${short_sha}"
+            echo "version=${version}"
+            echo "should_build=${should_build}"
           } >> "${GITHUB_OUTPUT}"
 
   build:
     name: Build ${{ matrix.image }}
     needs: sync
+    if: needs.sync.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -133,39 +148,23 @@ jobs:
           username: ${{ env.DOCKERHUB_NAMESPACE }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Check immutable image tag
-        id: image
-        env:
-          IMAGE_TAG: ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.image }}:sha-${{ needs.sync.outputs.short_sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if docker buildx imagetools inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
-            echo "Immutable image already exists: ${IMAGE_TAG}"
-            echo "skip=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "Image must be built: ${IMAGE_TAG}"
-            echo "skip=false" >> "${GITHUB_OUTPUT}"
-          fi
-
-      - name: Build and push immutable image
-        if: steps.image.outputs.skip != 'true'
+      - name: Build and push versioned image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: true
-          tags: ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.image }}:sha-${{ needs.sync.outputs.short_sha }}
+          tags: ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.image }}:${{ needs.sync.outputs.version }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ needs.sync.outputs.source_sha }}
-            org.opencontainers.image.version=sha-${{ needs.sync.outputs.short_sha }}
+            org.opencontainers.image.version=${{ needs.sync.outputs.version }}
           cache-from: type=gha,scope=${{ matrix.cache_scope }}
           cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
 
   promote:
-    name: Promote immutable images to latest
+    name: Promote versioned images to latest
     needs:
       - sync
       - build
@@ -183,12 +182,12 @@ jobs:
 
       - name: Promote both images
         env:
-          SHORT_SHA: ${{ needs.sync.outputs.short_sha }}
+          VERSION: ${{ needs.sync.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
           for image in z3r0 sandbox-runtime; do
-            source_image="${DOCKERHUB_NAMESPACE}/${image}:sha-${SHORT_SHA}"
+            source_image="${DOCKERHUB_NAMESPACE}/${image}:${VERSION}"
             latest_image="${DOCKERHUB_NAMESPACE}/${image}:latest"
             docker buildx imagetools create --tag "${latest_image}" "${source_image}"
           done
@@ -205,7 +204,7 @@ jobs:
     steps:
       - name: Generate deployment files
         env:
-          SHORT_SHA: ${{ needs.sync.outputs.short_sha }}
+          VERSION: ${{ needs.sync.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -213,7 +212,8 @@ jobs:
           cat > docker-compose.yaml <<'COMPOSE'
           name: z3r0
 
-          # Register this exact image in Z3r0's Sandbox Images page:
+          # Published Z3r0 version: __VERSION__
+          # Register this image in Z3r0's Sandbox Images page:
           # __SANDBOX_IMAGE__
 
           services:
@@ -233,7 +233,7 @@ jobs:
                 - /var/run/docker.sock:/var/run/docker.sock
 
             postgres:
-              image: ghcr.io/yv1ing/postgres-for-rag@sha256:b87fc180f2a68d578fe6935e2c4a82f3df4e1005304476eeb05ffacfd6d54d42
+              image: ghcr.io/yv1ing/postgres-for-rag:latest
               container_name: z3r0-postgres
               restart: unless-stopped
               environment:
@@ -251,7 +251,7 @@ jobs:
                 retries: 20
 
             pgadmin:
-              image: ghcr.io/yv1ing/pgadmin4@sha256:66a300a7ecdcc1f325af0c430315329bca46cd4a7067227d6899802238167c6e
+              image: ghcr.io/yv1ing/pgadmin4:latest
               container_name: z3r0-pgadmin
               restart: unless-stopped
               profiles:
@@ -269,10 +269,11 @@ jobs:
                   condition: service_healthy
           COMPOSE
 
-          app_image="${DOCKERHUB_NAMESPACE}/z3r0:sha-${SHORT_SHA}"
-          sandbox_image="${DOCKERHUB_NAMESPACE}/sandbox-runtime:sha-${SHORT_SHA}"
+          app_image="${DOCKERHUB_NAMESPACE}/z3r0:latest"
+          sandbox_image="${DOCKERHUB_NAMESPACE}/sandbox-runtime:latest"
           sed -i "s|__APP_IMAGE__|${app_image}|g" docker-compose.yaml
           sed -i "s|__SANDBOX_IMAGE__|${sandbox_image}|g" docker-compose.yaml
+          sed -i "s|__VERSION__|${VERSION}|g" docker-compose.yaml
 
           cat > .env.example <<'ENVFILE'
           # Copy this file to .env and set strong, unique passwords.
@@ -290,7 +291,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.sync.outputs.source_sha }}
-          SHORT_SHA: ${{ needs.sync.outputs.short_sha }}
+          VERSION: ${{ needs.sync.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -331,7 +332,7 @@ jobs:
 
           delivery_commit="$(
             jq -n \
-              --arg message "Generate deployment for sha-${SHORT_SHA}" \
+              --arg message "Generate latest deployment for ${VERSION}" \
               --arg tree "${tree_sha}" \
               --arg parent "${SOURCE_SHA}" \
               '{message: $message, tree: $tree, parents: [$parent]}' |
