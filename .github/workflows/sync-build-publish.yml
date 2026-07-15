@@ -23,6 +23,7 @@ jobs:
       contents: write
     outputs:
       source_sha: ${{ steps.source.outputs.source_sha }}
+      upstream_sha: ${{ steps.source.outputs.upstream_sha }}
       version: ${{ steps.source.outputs.version }}
       should_build: ${{ steps.source.outputs.should_build }}
 
@@ -45,6 +46,7 @@ jobs:
           git fetch --prune upstream main
 
           previous_sha="$(git rev-parse HEAD)"
+          upstream_sha="$(git rev-parse upstream/main)"
 
           if git merge-base --is-ancestor upstream/main HEAD; then
             echo "Fork already contains upstream/main"
@@ -79,28 +81,24 @@ jobs:
             exit 1
           fi
 
-          last_delivered_source=""
+          last_delivered_upstream=""
           if git fetch --no-tags origin "+delivery:refs/remotes/origin/delivery" 2>/dev/null; then
-            last_delivered_source="$(
+            last_delivered_upstream="$(
               git log -1 --format=%B origin/delivery |
-                sed -n 's/^Source-SHA: //p' |
+                sed -n 's/^Upstream-SHA: //p' |
                 tail -n 1
             )"
-            # Compatibility with delivery commits created before Source-SHA
-            # was recorded in the commit message.
-            if [[ -z "${last_delivered_source}" ]]; then
-              last_delivered_source="$(git rev-parse 'origin/delivery^1' 2>/dev/null || true)"
-            fi
           fi
 
           should_build="true"
-          if [[ "${GITHUB_EVENT_NAME}" == "schedule" && "${source_sha}" == "${last_delivered_source}" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" && "${upstream_sha}" == "${last_delivered_upstream}" ]]; then
             should_build="false"
-            echo "Source ${source_sha} is already published; skipping scheduled rebuild."
+            echo "Upstream ${upstream_sha} is already published; skipping scheduled rebuild."
           fi
 
           {
             echo "source_sha=${source_sha}"
+            echo "upstream_sha=${upstream_sha}"
             echo "version=${version}"
             echo "should_build=${should_build}"
           } >> "${GITHUB_OUTPUT}"
@@ -288,6 +286,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.sync.outputs.source_sha }}
+          UPSTREAM_SHA: ${{ needs.sync.outputs.upstream_sha }}
           VERSION: ${{ needs.sync.outputs.version }}
         shell: bash
         run: |
@@ -334,10 +333,16 @@ jobs:
 
           delivery_commit="$(
             jq -n \
-              --arg message "Generate latest deployment for ${VERSION}\n\nSource-SHA: ${SOURCE_SHA}" \
+              --arg title "Generate latest deployment for ${VERSION}" \
+              --arg source_sha "${SOURCE_SHA}" \
+              --arg upstream_sha "${UPSTREAM_SHA}" \
               --arg tree "${tree_sha}" \
               --arg parent "${commit_parent}" \
-              '{message: $message, tree: $tree, parents: [$parent]}' |
+              '{
+                message: ($title + "\n\nSource-SHA: " + $source_sha + "\nUpstream-SHA: " + $upstream_sha),
+                tree: $tree,
+                parents: [$parent]
+              }' |
               gh api \
                 --method POST \
                 "repos/${GITHUB_REPOSITORY}/git/commits" \
