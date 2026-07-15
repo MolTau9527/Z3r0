@@ -1,7 +1,7 @@
 from http import HTTPStatus
 
 from handler.common.http import raise_api_error
-from middleware.auth import AuthUser
+from middleware.system_user import AuthUser
 from schema.common.responses import CommonResponse
 from schema.work_project.projects import (
     CreateWorkProjectRequest,
@@ -103,7 +103,7 @@ async def create_work_project_session_handler(
     if result.not_found:
         raise_api_error(HTTPStatus.NOT_FOUND, "work project not found")
     if result.inactive:
-        raise_api_error(HTTPStatus.BAD_REQUEST, "canceled projects cannot create sessions")
+        raise_api_error(HTTPStatus.BAD_REQUEST, "only active projects can create sessions")
     return CommonResponse(data=CreateWorkProjectSessionResponse(session_id=result.session_id))
 
 
